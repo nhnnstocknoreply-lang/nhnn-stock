@@ -41,7 +41,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#2563EB !impor
   document.getElementById('pwa-manifest').href=URL.createObjectURL(b);
 })();
 if('serviceWorker' in navigator){
-  const sw="const C='nhnn-v5';self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(fetch(e.request).catch(()=>caches.match(e.request)));});";
+  const sw="const C='nhnn-v7';self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(fetch(e.request).catch(()=>caches.match(e.request)));});";
   navigator.serviceWorker.register(URL.createObjectURL(new Blob([sw],{type:'text/javascript'}))).catch(()=>{});
 }
 </script>
@@ -104,16 +104,18 @@ function compressImage(file){
   });
 }
 
-function eHtml(title,rows,footer=''){
-  return `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#f8f8f8;padding:20px"><div style="background:#1E3A5F;padding:24px;border-radius:8px 8px 0 0;text-align:center"><h2 style="color:#60A5FA;margin:0;font-size:20px">NHNN Stock Control</h2><p style="color:#93C5FD;margin:6px 0 0;font-size:13px">National Hospital for Neurology and Neurosurgery</p></div><div style="background:white;padding:24px;border-radius:0 0 8px 8px;border:1px solid #ddd"><h3 style="color:#1E3A5F;margin:0 0 16px">${title}</h3><table style="width:100%;border-collapse:collapse">${rows.map(([k,v])=>`<tr><td style="padding:8px 12px;background:#f5f5f5;font-weight:600;color:#555;width:40%;border-bottom:1px solid #eee">${k}</td><td style="padding:8px 12px;color:#333;border-bottom:1px solid #eee">${v}</td></tr>`).join('')}</table>${footer?`<p style="color:#888;font-size:12px;margin-top:16px">${footer}</p>`:''}</div><p style="text-align:center;color:#aaa;font-size:11px;margin-top:12px">NHNN Stock Control — Do not reply to this email</p></div>`;
+function eHtml(title,rows){
+  const divider='─'.repeat(40);
+  const body=rows.map(([k,v])=>`${k}: ${v}`).join('\n');
+  return `NHNN STOCK CONTROL\n${divider}\n${title}\n${divider}\n${body}\n${divider}\nNHNN Stock Control — automated notification`;
 }
 
 
-async function sendEmail(to,subj,html){
+async function sendEmail(to,subj,body){
   const toStr=(Array.isArray(to)?to:[to]).filter(Boolean).join(', ');
   if(!toStr)return;
   try{
-    await emailjs.send('service_zg9c8gv','template_ynznoew',{to_email:toStr,subject:subj,html_body:html});
+    await emailjs.send('service_zg9c8gv','template_ynznoew',{to_email:toStr,subject:subj,message:body});
   }catch(e){console.error('Email failed:',e);}
 }
 
@@ -129,6 +131,43 @@ const S = {
 };
 
 const { useState, useEffect, useRef } = React;
+
+function Toast({msg,type,duration=5000}){
+  const[progress,setProgress]=useState(100);
+  const configs={
+    success:{accent:'#10B981',icon:'✓',label:'Success'},
+    error:  {accent:'#EF4444',icon:'✕',label:'Error'},
+    warning:{accent:'#F59E0B',icon:'⚠',label:'Warning'},
+    info:   {accent:'#6366F1',icon:'i',label:'Info'},
+  };
+  const cfg=configs[type]||configs.success;
+  useEffect(()=>{
+    const start=Date.now();
+    const tick=()=>{
+      const elapsed=Date.now()-start;
+      const pct=Math.max(0,100-(elapsed/duration)*100);
+      setProgress(pct);
+      if(pct>0)requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  },[]);
+  return(
+    <div style={{background:'#FFFFFF',borderRadius:14,padding:'14px 16px',boxShadow:'0 8px 32px rgba(15,23,42,.18)',maxWidth:320,width:'90vw',overflow:'hidden',border:'1.5px solid #E2E8F0'}}>
+      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:10}}> 
+        <div style={{width:32,height:32,borderRadius:'50%',background:cfg.accent+'20',display:'flex',alignItems:'center',justifyContent:'center',color:cfg.accent,fontWeight:700,fontSize:15,flexShrink:0}}>
+          {cfg.icon}
+        </div>
+        <div style={{flex:1}}>
+          <div style={{color:'#0F172A',fontWeight:700,fontSize:13}}>{cfg.label}</div>
+          <div style={{color:'#64748B',fontSize:13,marginTop:1}}>{msg}</div>
+        </div>
+      </div>
+      <div style={{height:3,background:'#F1F5F9',borderRadius:4,overflow:'hidden'}}>
+        <div style={{height:'100%',width:progress+'%',background:cfg.accent,borderRadius:4,transition:'width .1s linear'}}/>
+      </div>
+    </div>
+  );
+}
 
 function BarcodeModal({onScan,onClose}){
   const vref=useRef(null),streamRef=useRef(null),animRef=useRef(null);
@@ -429,6 +468,16 @@ function UsePartScreen({parts,users,images,updateParts,navigate,addToast}){
     if(!userId){addToast('Select your name','error');return;}
     const valid=items.filter(i=>i.part);
     if(!valid.length){addToast('Select at least one part','error');return;}
+    for(const item of valid){
+      if(item.qty>item.part.currentStock){
+        addToast(`Only ${item.part.currentStock} of "${item.part.partName}" available`,'error');
+        return;
+      }
+      if(item.part.currentStock===0){
+        addToast(`"${item.part.partName}" is out of stock`,'error');
+        return;
+      }
+    }
     setBusy(true);
     const user=users.find(u=>u.id===userId);
     const allEmails=users.map(u=>u.email).filter(Boolean);
@@ -492,7 +541,7 @@ function UsePartScreen({parts,users,images,updateParts,navigate,addToast}){
               <div style={{display:'flex',alignItems:'center',gap:8}}>
                 <button onClick={()=>setQty(item.id,item.qty-1)} style={{...S.btn,background:'#F1F5F9',color:'#0F172A',width:36,height:36,padding:0,borderRadius:8}}>−</button>
                 <input type="number" min="1" value={item.qty} onChange={e=>setQty(item.id,parseInt(e.target.value)||1)} style={{...S.inp,width:70,textAlign:'center'}}/>
-                <button onClick={()=>setQty(item.id,item.qty+1)} style={{...S.btn,background:'#F1F5F9',color:'#0F172A',width:36,height:36,padding:0,borderRadius:8}}>+</button>
+                <button onClick={()=>setQty(item.id,Math.min(item.qty+1,item.part?item.part.currentStock:9999))} style={{...S.btn,background:'#F1F5F9',color:'#0F172A',width:36,height:36,padding:0,borderRadius:8}}>+</button>
               </div>
             </div>
           </div>
@@ -565,7 +614,7 @@ function RestockScreen({parts,images,updateParts,navigate,addToast}){
               <div style={{display:'flex',alignItems:'center',gap:8}}>
                 <button onClick={()=>setQty(item.id,item.qty-1)} style={{...S.btn,background:'#F1F5F9',color:'#0F172A',width:36,height:36,padding:0,borderRadius:8}}>−</button>
                 <input type="number" min="1" value={item.qty} onChange={e=>setQty(item.id,parseInt(e.target.value)||1)} style={{...S.inp,width:70,textAlign:'center'}}/>
-                <button onClick={()=>setQty(item.id,item.qty+1)} style={{...S.btn,background:'#F1F5F9',color:'#0F172A',width:36,height:36,padding:0,borderRadius:8}}>+</button>
+                <button onClick={()=>setQty(item.id,Math.min(item.qty+1,item.part?item.part.currentStock:9999))} style={{...S.btn,background:'#F1F5F9',color:'#0F172A',width:36,height:36,padding:0,borderRadius:8}}>+</button>
               </div>
             </div>
           </div>
@@ -805,10 +854,10 @@ function App() {
     })();
   }, []);
 
-  const addToast = (msg, type = "success") => {
+  const addToast = (msg, type = "success", duration = 5000) => {
     const id = uid();
-    setToasts(prev => [...prev, { id, msg, type }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
+    setToasts(prev => [...prev, { id, msg, type, duration }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), duration + 200);
   };
   const updateParts = async (np) => { await store.set("parts", np); setParts([...np]); };
   const updateUsers = async (nu) => { await store.set("users", nu); setUsers([...nu]); };
@@ -827,23 +876,25 @@ function App() {
 
   if (!pinOk) return <PinScreen onUnlock={() => setPinOk(true)} />;
   const props = { parts, users, images, setImages, updateParts, updateUsers, navigate, addToast, LOGO };
-  const screens = {
-    home: <HomeScreen {...props} />,
-    settings: <SettingsScreen {...props} onChangePIN={() => { store.set('app_pin', null); setPinOk(false); }} />,
-    usePart: <UsePartScreen {...props} />,
-    addPartMenu: <AddPartMenu {...props} />,
-    restockPart: <RestockScreen {...props} />,
-    addNewPart: <AddNewPartScreen {...props} />,
-    stockCorrection: <StockCorrectionScreen {...props} />,
-    importExcel: <ImportExcelScreen {...props} />,
-  };
+
+  function renderScreen() {
+    switch(screen) {
+      case 'settings':     return <SettingsScreen {...props} onChangePIN={() => { store.set('app_pin', null); setPinOk(false); }} />;
+      case 'usePart':      return <UsePartScreen {...props} />;
+      case 'addPartMenu':  return <AddPartMenu {...props} />;
+      case 'restockPart':  return <RestockScreen {...props} />;
+      case 'addNewPart':   return <AddNewPartScreen {...props} />;
+      case 'stockCorrection': return <StockCorrectionScreen {...props} />;
+      case 'importExcel':  return <ImportExcelScreen {...props} />;
+      default:             return <HomeScreen {...props} />;
+    }
+  }
 
   return (
-    <div style={{ fontFamily: "'Inter',system-ui,-apple-system,sans-serif" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-      {screens[screen] || screens.home}
-      <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", gap: 8, zIndex: 9999, alignItems: "center", pointerEvents: "none" }}>
-        {toasts.map(t => <Toast key={t.id} msg={t.msg} type={t.type} />)}
+    <div style={{fontFamily:"'Inter',system-ui,-apple-system,sans-serif"}}>
+      {renderScreen()}
+      <div style={{position:'fixed',bottom:24,left:'50%',transform:'translateX(-50%)',display:'flex',flexDirection:'column',gap:8,zIndex:9999,alignItems:'center',pointerEvents:'none'}}>
+        {toasts.map(t => <Toast key={t.id} msg={t.msg} type={t.type} duration={t.duration||5000}/>)}
       </div>
     </div>
   );
