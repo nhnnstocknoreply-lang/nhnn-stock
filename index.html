@@ -626,22 +626,34 @@ function AddNewPartScreen({parts,users,images,setImages,updateParts,navigate,add
     </div>
   );
 }
-function StockCorrectionScreen({parts,users,images,updateParts,navigate,addToast}){
+function StockCorrectionScreen({parts,users,images,setImages,updateParts,navigate,addToast}){
   const[sel,setSel]=useState(null);
   const[form,setForm]=useState({});
   const[newStock,setNewStock]=useState('');
   const[reason,setReason]=useState('');
+  const[imgData,setImgData]=useState(null);
   const[busy,setBusy]=useState(false);
-  const pick=p=>{setSel(p);setForm({partCode:p.partCode,partNumber:p.partNumber,partName:p.partName,binNumber:p.binNumber,supplier:p.supplier,minimumStock:p.minimumStock});setNewStock(p.currentStock.toString());};
+  const fileRef=useRef(null);
+  const pick=p=>{
+    setSel(p);
+    setForm({partCode:p.partCode,partNumber:p.partNumber,partName:p.partName,binNumber:p.binNumber,supplier:p.supplier,minimumStock:p.minimumStock});
+    setNewStock(p.currentStock.toString());
+    setImgData(null);
+  };
   const set=(k,v)=>setForm(prev=>({...prev,[k]:v}));
+  const handleImg=async e=>{const f=e.target.files[0];if(f)setImgData(await compressImage(f));};
   const submit=async()=>{
     if(!sel){addToast('Select a part','error');return;}
     if(newStock===''){addToast('Enter corrected stock quantity','error');return;}
     setBusy(true);
     const corrected=parseInt(newStock)||0;
     await updateParts(parts.map(p=>p.id===sel.id?{...p,...form,minimumStock:parseInt(form.minimumStock)||0,currentStock:corrected,updatedAt:new Date().toISOString()}:p));
+    if(imgData){
+      await store.set(`img_${sel.partCode}`,imgData);
+      setImages(prev=>({...prev,[sel.partCode]:imgData}));
+    }
     const mgrs=users.filter(u=>u.isManager).map(u=>u.email).filter(Boolean);
-    if(mgrs.length)await sendEmail(mgrs,`⚠️ Stock Correction — ${sel.partName}`,eHtml('Stock Correction',[['Part',sel.partName],['Part Code',sel.partCode],['Previous Stock',`${sel.currentStock} units`],['New Stock',`${corrected} units`],['Bin Number',form.binNumber||'N/A'],['Reason',reason||'Not specified'],['Date',new Date().toLocaleString()]]));
+    if(mgrs.length)await sendEmail(mgrs,`⚠️ Stock Correction — ${sel.partName}`,eHtml('Stock Correction',[['Part',sel.partName],['Part Code',sel.partCode],['Previous Stock',`${sel.currentStock} units`],['New Stock',`${corrected} units`],['Bin Number',form.binNumber||'N/A'],['Reason',reason||'Not specified'],['Photo Updated',imgData?'Yes':'No'],['Date',new Date().toLocaleString()]]));
     setBusy(false);addToast('Corrected! Manager notified.','success');navigate('addPartMenu');
   };
   return(
