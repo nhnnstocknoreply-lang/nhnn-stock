@@ -41,7 +41,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#2563EB !impor
   document.getElementById('pwa-manifest').href=URL.createObjectURL(b);
 })();
 if('serviceWorker' in navigator){
-  const sw="const C='nhnn-v7';self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(fetch(e.request).catch(()=>caches.match(e.request)));});";
+  const sw="const C='nhnn-v8';self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(fetch(e.request).catch(()=>caches.match(e.request)));});";
   navigator.serviceWorker.register(URL.createObjectURL(new Blob([sw],{type:'text/javascript'}))).catch(()=>{});
 }
 </script>
@@ -222,7 +222,7 @@ function PartSearch({parts,images,label='Search part',onSelect}){
     const lq=q.toLowerCase();
     const m=!lq||[p.partCode,p.partNumber,p.partName].some(s=>s?.toLowerCase().includes(lq));
     return m&&(!supF||p.supplier===supF)&&(!binF||p.binNumber===binF);
-  }).slice(0,10);
+  }).slice(0,20);
   const pick=p=>{onSelect(p);setQ('');setOpen(false);};
   return(
     <div style={{position:'relative'}}>
@@ -236,22 +236,26 @@ function PartSearch({parts,images,label='Search part',onSelect}){
         </select>
       </div>
       <div style={{position:'relative'}}>
-        <input value={q} onChange={e=>{setQ(e.target.value);setOpen(true);}} onFocus={()=>setOpen(true)}
+        <input value={q} onChange={e=>{setQ(e.target.value);setOpen(true);}} onFocus={()=>setOpen(true)} onBlur={()=>setTimeout(()=>setOpen(false),200)}
           placeholder={label} style={{...S.inp,paddingRight:44}}/>
         <button onClick={()=>setShowCam(true)} style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',fontSize:18,color:'#2563EB'}}>📷</button>
       </div>
-      {open&&q&&(
-        <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:200,background:'#FFFFFF',border:`1.5px solid ${C.bdr}`,borderRadius:12,maxHeight:260,overflowY:'auto',marginTop:4,boxShadow:'0 8px 32px rgba(15,23,42,.12)'}} onMouseDown={e=>e.preventDefault()}>
+      {open&&(
+        <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:200,background:'#FFFFFF',border:`1.5px solid ${C.bdr}`,borderRadius:12,maxHeight:400,overflowY:'auto',marginTop:4,boxShadow:'0 8px 32px rgba(15,23,42,.12)'}} onMouseDown={e=>e.preventDefault()}>
           {results.length===0?<div style={{padding:16,color:'#94A3B8',textAlign:'center',fontSize:13}}>No parts found</div>
           :results.map(p=>(
             <div key={p.id} onClick={()=>pick(p)} onMouseEnter={e=>e.currentTarget.style.background='#F8FAFC'} onMouseLeave={e=>e.currentTarget.style.background='transparent'} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',cursor:'pointer',borderBottom:`1px solid ${C.bdr}`,transition:'background .15s'}}>
-              {images[p.partCode]?<img src={images[p.partCode]} style={{width:36,height:36,objectFit:'cover',borderRadius:6,flexShrink:0}}/>
-              :<div style={{width:36,height:36,background:'#F1F5F9',borderRadius:6,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14}}>📦</div>}
+              {images[p.partCode]?<img src={images[p.partCode]} style={{width:56,height:56,objectFit:'cover',borderRadius:10,flexShrink:0,border:'1.5px solid #E2E8F0'}}/>
+              :<div style={{width:56,height:56,background:'#F1F5F9',borderRadius:10,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,border:'1.5px solid #E2E8F0'}}>📦</div>}
               <div style={{flex:1,minWidth:0}}>
-                <div style={{color:C.txt,fontSize:13,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.partName}</div>
-                <div style={{color:C.sub,fontSize:11}}>{p.partCode} · Bin: {p.binNumber}</div>
+                <div style={{color:C.txt,fontSize:14,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.partName}</div>
+                <div style={{color:C.sub,fontSize:12,marginTop:2}}>{p.partCode} · Bin: {p.binNumber} · {p.supplier}</div>
+                <div style={{marginTop:4}}>
+                  <span style={{background:p.currentStock===0?'#FEF2F2':p.currentStock<=p.minimumStock?'#FFFBEB':'#F0FDF4',color:p.currentStock===0?'#EF4444':p.currentStock<=p.minimumStock?'#B45309':'#16A34A',fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:4}}>
+                    {p.currentStock===0?'Out of stock':p.currentStock<=p.minimumStock?`Low: ${p.currentStock} left`:`${p.currentStock} in stock`}
+                  </span>
+                </div>
               </div>
-              <div style={{color:p.currentStock<=p.minimumStock?'#EF4444':'#10B981',fontSize:12,fontWeight:600,flexShrink:0}}>Qty: {p.currentStock}</div>
             </div>
           ))}
         </div>
@@ -823,7 +827,7 @@ function exportExcel(parts,addToast){
   const ws=XLSX.utils.json_to_sheet(rows);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Stock');
-  XLSX.writeFile(wb,`NHNN_Stock_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb,`NHNN_Stock_${new Date().toISOString().slice(0,20)}.xlsx`);
 }
 
 
