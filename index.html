@@ -106,19 +106,14 @@ async function sendEmail(to,subject,body,attachments=[]){
   const toArr=(Array.isArray(to)?to:[to]).filter(Boolean);
   if(!toArr.length)return;
   try{
-    const payload={
-      from:'NHNN Stock Control <noreply@nhnnstock.co.uk>',
-      to:toArr,
-      subject,
-      text:body,
-    };
+    const payload={to:toArr,subject,text:body};
     if(attachments.length)payload.attachments=attachments;
-    const res=await fetch('https://api.resend.com/emails',{
+    const res=await fetch('/.netlify/functions/send-email',{
       method:'POST',
-      headers:{'Authorization':'Bearer re_KGvUZPZ7_6bwv8iBceJYF82cLMNqnq1YS','Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify(payload)
     });
-    if(!res.ok){const e=await res.text();console.error('Resend error:',e);}
+    if(!res.ok){const e=await res.text();console.error('Email error:',e);}
   }catch(e){console.error('sendEmail',e);}
 }
 
