@@ -13,6 +13,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
@@ -874,6 +875,8 @@ function App(){
   const [pinOk,setPinOk]=useState(false);
 
   useEffect(()=>{
+    // Sign in anonymously so Firestore auth rules are satisfied
+    firebase.auth().signInAnonymously().catch(e=>console.error('auth:',e));
     const unP=db.collection('nhnn').doc('parts').onSnapshot(
       async s=>{
         const p=s.exists?(s.data().v||[]):[];
