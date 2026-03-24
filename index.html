@@ -276,17 +276,17 @@ function PartSearch({parts,images,label,onSelect}){
       </div>
       {open&&(
         <div onMouseDown={e=>e.preventDefault()}
-          style={{position:'absolute',top:'calc(100% + 4px)',left:0,right:0,zIndex:200,background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:12,maxHeight:360,overflowY:'auto',boxShadow:'0 8px 32px rgba(15,23,42,.13)'}}>
+          style={{position:'absolute',top:'calc(100% + 4px)',left:0,right:0,zIndex:200,background:'#fff',border:'1.5px solid #E2E8F0',borderRadius:12,maxHeight:480,overflowY:'auto',boxShadow:'0 8px 32px rgba(15,23,42,.13)'}}>
           {results.length===0
             ?<div style={{padding:16,color:C.sub,textAlign:'center',fontSize:13}}>{parts.length===0?'No parts added yet':'No matches found'}</div>
             :results.map(p=>(
               <div key={p.id} onClick={()=>pick(p)}
                 onMouseEnter={e=>e.currentTarget.style.background='#F8FAFC'}
                 onMouseLeave={e=>e.currentTarget.style.background='transparent'}
-                style={{display:'flex',alignItems:'flex-start',gap:14,padding:'14px 16px',cursor:'pointer',borderBottom:'1px solid #F1F5F9',transition:'background .12s'}}>
+                style={{display:'flex',alignItems:'center',gap:16,padding:'16px',cursor:'pointer',borderBottom:'1px solid #F1F5F9',transition:'background .12s',minHeight:92}}>
                 {(images&&images[p.partCode])
-                  ?<img src={images[p.partCode]} style={{width:72,height:72,objectFit:'cover',borderRadius:12,flexShrink:0,border:'1.5px solid #E2E8F0'}}/>
-                  :<div style={{width:72,height:72,background:'#F1F5F9',borderRadius:12,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:28}}>📦</div>}
+                  ?<img src={images[p.partCode]} style={{width:72,height:72,objectFit:'cover',borderRadius:12,flexShrink:0,flexGrow:0,border:'1.5px solid #E2E8F0',display:'block'}}/>
+                  :<div style={{width:72,height:72,background:'#F1F5F9',borderRadius:12,flexShrink:0,flexGrow:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:28}}>📦</div>}
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{color:C.txt,fontSize:15,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.partName}</div>
                   <div style={{color:C.sub,fontSize:13,marginTop:3}}>{p.partCode} · Bin: {p.binNumber} · {p.supplier}</div>
