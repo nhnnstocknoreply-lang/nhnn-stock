@@ -39,7 +39,7 @@ exports.handler = async (event) => {
         path: '/emails',
         method: 'POST',
         headers: {
-          'Authorization': 'Bearer re_KGvUZPZ7_6bwv8iBceJYF82cLMNqnq1YS',
+          'Authorization': 'Bearer re_gP54iJG5_14UpmiqRQ2ZXFXysWRLFBKyM',
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(bodyStr),
         },
