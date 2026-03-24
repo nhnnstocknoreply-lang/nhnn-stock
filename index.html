@@ -441,7 +441,7 @@ function SettingsScreen({users,saveUsers:su,navigate,toast,resetPin}){
 }
 
 /* ── Use Part ── */
-function UsePartScreen({parts,users,navigate,toast}){
+function UsePartScreen({parts,users,images,navigate,toast}){
   const [userId,setUserId]=useState('');
   const [items,setItems]=useState([{id:uid(),part:null,qty:1}]);
   const [busy,setBusy]=useState(false);
@@ -530,7 +530,7 @@ function UsePartScreen({parts,users,navigate,toast}){
 }
 
 /* ── Add Part Menu ── */
-function AddMenu({navigate}){
+function AddMenu({navigate,parts,users,images,setImages,toast}){
   return(
     <div style={{minHeight:'100vh',background:C.bg,padding:20}}>
       <div style={{maxWidth:480,margin:'0 auto'}}>
@@ -557,7 +557,7 @@ function AddMenu({navigate}){
 }
 
 /* ── Restock ── */
-function RestockScreen({parts,navigate,toast}){
+function RestockScreen({parts,images,navigate,toast}){
   const [items,setItems]=useState([{id:uid(),part:null,qty:1}]);
   const [busy,setBusy]=useState(false);
   const setQty=(id,q)=>setItems(prev=>prev.map(i=>i.id===id?{...i,qty:Math.max(1,q)}:i));
@@ -604,7 +604,7 @@ function RestockScreen({parts,navigate,toast}){
 }
 
 /* ── New Part ── */
-function NewPartScreen({parts,users,navigate,toast}){
+function NewPartScreen({parts,users,images,setImages,navigate,toast}){
   const [form,setForm]=useState({partCode:'',partNumber:'',binNumber:'',partName:'',supplier:'',currentStock:'',minimumStock:''});
   const [img,setImg]=useState(null);
   const [busy,setBusy]=useState(false);
@@ -669,7 +669,7 @@ function NewPartScreen({parts,users,navigate,toast}){
 }
 
 /* ── Stock Correction ── */
-function CorrectionScreen({parts,users,navigate,toast}){
+function CorrectionScreen({parts,users,images,setImages,navigate,toast}){
   const [sel,setSel]=useState(null);
   const [form,setForm]=useState({});
   const [newStock,setNewStock]=useState('');
@@ -741,7 +741,7 @@ function CorrectionScreen({parts,users,navigate,toast}){
 }
 
 /* ── Import ── */
-function ImportScreen({parts,navigate,toast}){
+function ImportScreen({parts,images,navigate,toast}){
   const [preview,setPreview]=useState(null);
   const [parsed,setParsed]=useState([]);
   const [busy,setBusy]=useState(false);
@@ -817,7 +817,7 @@ function ImportScreen({parts,navigate,toast}){
 }
 
 /* ── Export ── */
-function ExportScreen({parts,navigate,toast}){
+function ExportScreen({parts,images,navigate,toast}){
   const [email,setEmail]=useState('');
   const [sending,setSending]=useState(false);
   const fname='NHNN_Stock_'+new Date().toISOString().slice(0,10)+'.xlsx';
@@ -875,30 +875,37 @@ function App(){
   const [pinOk,setPinOk]=useState(false);
 
   useEffect(()=>{
-    // Sign in anonymously so Firestore auth rules are satisfied
-    firebase.auth().signInAnonymously().catch(e=>console.error('auth:',e));
-    const unP=db.collection('nhnn').doc('parts').onSnapshot(
-      async s=>{
-        const p=s.exists?(s.data().v||[]):[];
-        setParts(p);
-        // Load photos for all parts
-        const imgs={};
-        await Promise.all(p.map(async part=>{
-          if(part.imageUrl){
-            const url=await getPhoto(part.imageUrl);
-            if(url)imgs[part.partCode]=url;
-          }
-        }));
-        setImages(imgs);
-        setLoaded(true);
-      },
-      e=>{console.error('parts:',e);setLoaded(true);}
-    );
-    const unU=db.collection('nhnn').doc('users').onSnapshot(
-      s=>setUsers(s.exists?(s.data().v||[]):[]),
-      e=>console.error('users:',e)
-    );
-    return()=>{unP();unU();};
+    let unP=null, unU=null;
+    // Wait for auth before starting Firestore listeners
+    const unAuth=firebase.auth().onAuthStateChanged(user=>{
+      if(user){
+        unP=db.collection('nhnn').doc('parts').onSnapshot(
+          async s=>{
+            const p=s.exists?(s.data().v||[]):[];
+            setParts(p);
+            const imgs={};
+            await Promise.all(p.map(async part=>{
+              if(part.imageUrl){
+                const url=await getPhoto(part.imageUrl);
+                if(url)imgs[part.partCode]=url;
+              }
+            }));
+            setImages(imgs);
+            setLoaded(true);
+          },
+          e=>{console.error('parts:',e);setLoaded(true);}
+        );
+        unU=db.collection('nhnn').doc('users').onSnapshot(
+          s=>setUsers(s.exists?(s.data().v||[]):[]),
+          e=>console.error('users:',e)
+        );
+      }
+    });
+    firebase.auth().signInAnonymously().catch(e=>{
+      console.error('auth:',e);
+      setLoaded(true);
+    });
+    return()=>{unAuth();if(unP)unP();if(unU)unU();};
   },[]);
 
   const toast=(msg,type='success',dur=5000)=>{
