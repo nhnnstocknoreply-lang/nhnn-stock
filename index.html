@@ -362,10 +362,10 @@ function SettingsScreen({users,saveUsers:su,navigate,toast,resetPin}){
   const [mgr,setMgr]=useState(false);
   const [pwInput,setPwInput]=useState('');
   const [pwErr,setPwErr]=useState('');
-  const [pwUnlocked,setPwUnlocked]=useState(false);
+  const [pwUnlocked,setPwUnlocked]=useState(()=>sessionStorage.getItem('mgr_unlocked')==='1');
   const MANAGER_PW='2022';
   const checkPw=()=>{
-    if(pwInput===MANAGER_PW){setPwUnlocked(true);setPwErr('');setView('users');}
+    if(pwInput===MANAGER_PW){sessionStorage.setItem('mgr_unlocked','1');setPwUnlocked(true);setPwErr('');setView('users');}
     else{setPwErr('Incorrect password');setPwInput('');}
   };
   const addUser=async()=>{
@@ -380,7 +380,7 @@ function SettingsScreen({users,saveUsers:su,navigate,toast,resetPin}){
   return(
     <div style={{minHeight:'100vh',background:C.bg,padding:20}}>
       <div style={{maxWidth:640,margin:'0 auto'}}>
-        <button onClick={()=>view==='menu'?navigate('home'):setView('menu')} style={bBtn}>← {view==='menu'?'Home':'Back'}</button>
+        <button onClick={()=>{if(view==='menu'){sessionStorage.removeItem('mgr_unlocked');navigate('home');}else setView('menu');}} style={bBtn}>← {view==='menu'?'Home':'Back'}</button>
         {view==='menu'&&<>
           <h2 style={{fontWeight:800,fontSize:30,color:C.txt,margin:'0 0 24px',letterSpacing:'-0.8px'}}>Settings</h2>
           {[{k:'users',icon:'👥',label:'Manage Users',desc:'Add or remove staff'},
@@ -451,10 +451,10 @@ function SettingsScreen({users,saveUsers:su,navigate,toast,resetPin}){
               {q:'How do I import from Excel?',a:'Your file must have these column headers: Part Code, Part Number, Bin Number, Part Name, Supplier, Current Stock, Minimum Stock. Import Excel, upload the file, check the preview, press Confirm.'},
               {q:'How do I export stock?',a:'Export Stock, then either Download Excel or type an email address and press Email Stock Summary.'},
               {q:'What is my badge number?',a:'The ID number on your hospital badge. Scan it or type it in the Use Part screen to identify yourself.'},
-              {q:'How do I add a user?',a:'Settings, Manage Users, enter the manager password, fill in name, email and badge number, press Add User.'},
-              {q:'What if I forget my PIN?',a:'Settings, Change PIN. You will be prompted to set a new one.'},
+              {q:'How do I add a user?',a:'Settings, Manage Users, enter the manager password (ask your manager), fill in the staff member name, email and badge number, press Add User. Only someone with the manager password can add or remove users.'},
+              {q:'What if I forget my PIN?',a:'If you forget your PIN on a device, open Chrome DevTools (press F12), go to Application, then Storage, click Clear site data, and refresh. You will be asked to set a new PIN. Your data in Firebase is not affected — only the local PIN is cleared.'},
               {q:'Does the app work offline?',a:'No — an internet connection is required as all data is stored in the cloud.'},
-              {q:'The app is stuck on connecting — what do I do?',a:'Check your internet connection. If connected, press F12, go to Application, Storage, Clear site data, then refresh the page.'},
+              {q:'The app is stuck on connecting — what do I do?',a:'Check your internet connection first. If connected but still stuck, open Chrome DevTools (F12), go to Application tab, Storage in the left sidebar, click Clear site data, then refresh. If on a tablet using Fully Kiosk Browser, check the device has a working internet connection.'},
             ].map((item,i)=>(
               <div key={i} style={{...card,padding:'16px 20px'}}>
                 <div style={{fontWeight:700,color:C.txt,fontSize:14,marginBottom:8}}>{item.q}</div>
