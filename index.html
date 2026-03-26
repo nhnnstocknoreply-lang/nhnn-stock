@@ -611,20 +611,25 @@ function UsePartScreen({parts,users,images,navigate,toast}){
 
   return(
     <div style={{minHeight:'100vh',background:C.bg,padding:20}}>
-      {/* Hidden input that captures scanner input when nothing else is focused */}
-      <input ref={scanInputRef} value={scanBuf}
-        onChange={e=>setScanBuf(e.target.value)}
-        onKeyDown={e=>{
-          if(e.key==='Enter'){
-            const code=scanBuf.trim();
-            setScanBuf('');
-            if(code)handleScan(code);
-          }
-        }}
-        style={{position:'fixed',top:-100,left:-100,width:1,height:1,opacity:0,pointerEvents:'none'}}
-        readOnly={false}
-        tabIndex={-1}
-      />
+      {/* Scanner capture bar - always visible and focused */}
+      <div style={{position:'sticky',top:0,zIndex:100,background:'rgba(240,242,255,0.95)',backdropFilter:'blur(8px)',padding:'8px 0 12px',marginBottom:4}}>
+        <div style={{position:'relative'}}>
+          <input ref={scanInputRef} value={scanBuf}
+            onChange={e=>setScanBuf(e.target.value)}
+            onKeyDown={e=>{
+              if(e.key==='Enter'){
+                const code=scanBuf.trim();
+                setScanBuf('');
+                if(code)handleScan(code);
+              }
+            }}
+            onBlur={()=>setTimeout(()=>scanInputRef.current?.focus(),50)}
+            placeholder="📷 Ready to scan — point scanner here..."
+            style={{...inp,background:'rgba(255,255,255,0.9)',border:'1.5px solid #2563EB',borderRadius:12,fontSize:14,color:C.sub,cursor:'default'}}
+            autoComplete="off"
+          />
+        </div>
+      </div>
       <div style={{maxWidth:640,margin:'0 auto'}}>
         <button onClick={()=>navigate('home')} style={bBtn}>← Home</button>
         <h2 style={{fontWeight:800,fontSize:30,color:C.txt,margin:'0 0 8px',letterSpacing:'-0.8px'}}>Use Part</h2>
@@ -774,30 +779,34 @@ function RestockScreen({parts,images,navigate,toast}){
 
   return(
     <div style={{minHeight:'100vh',background:C.bg,padding:20}}>
-      <input ref={restockScanRef} value={restockBuf}
-        onChange={e=>setRestockBuf(e.target.value)}
-        onKeyDown={e=>{
-          if(e.key==='Enter'){
-            const code=restockBuf.trim();
-            setRestockBuf('');
-            if(!code)return;
-            const part=parts.find(p=>p.partCode===code||p.partNumber===code);
-            if(part){
-              setItems(prev=>{
-                const existing=prev.findIndex(i=>i.part&&i.part.id===part.id);
-                if(existing!==-1){
-                  const updated=[...prev];
-                  updated[existing]={...updated[existing],qty:updated[existing].qty+1};
-                  return updated;
-                }
-                return [...prev,{id:uid(),part,qty:1}];
-              });
+      <div style={{position:'sticky',top:0,zIndex:100,background:'rgba(240,242,255,0.95)',backdropFilter:'blur(8px)',padding:'8px 0 12px',marginBottom:4}}>
+        <input ref={restockScanRef} value={restockBuf}
+          onChange={e=>setRestockBuf(e.target.value)}
+          onKeyDown={e=>{
+            if(e.key==='Enter'){
+              const code=restockBuf.trim();
+              setRestockBuf('');
+              if(!code)return;
+              const part=parts.find(p=>p.partCode===code||p.partNumber===code);
+              if(part){
+                setItems(prev=>{
+                  const existing=prev.findIndex(i=>i.part&&i.part.id===part.id);
+                  if(existing!==-1){
+                    const updated=[...prev];
+                    updated[existing]={...updated[existing],qty:updated[existing].qty+1};
+                    return updated;
+                  }
+                  return [...prev,{id:uid(),part,qty:1}];
+                });
+              }
             }
-          }
-        }}
-        style={{position:'fixed',top:-100,left:-100,width:1,height:1,opacity:0,pointerEvents:'none'}}
-        tabIndex={-1}
-      />
+          }}
+          onBlur={()=>setTimeout(()=>restockScanRef.current?.focus(),50)}
+          placeholder="📷 Ready to scan — point scanner here..."
+          style={{...inp,background:'rgba(255,255,255,0.9)',border:'1.5px solid #10B981',borderRadius:12,fontSize:14,color:C.sub}}
+          autoComplete="off"
+        />
+      </div>
       <div style={{maxWidth:640,margin:'0 auto'}}>
         <button onClick={()=>navigate('addMenu')} style={bBtn}>← Back</button>
         <h2 style={{fontWeight:800,fontSize:30,color:C.txt,margin:'0 0 8px',letterSpacing:'-0.8px'}}>Restock Parts</h2>
