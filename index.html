@@ -470,8 +470,12 @@ function UsePartScreen({parts,users,images,navigate,toast}){
       const user=(users||[]).find(u=>u.badge&&u.badge===code);
       if(user){setUserId(user.id);setFoundUser(user);return;}
     }
-    // Check part
-    const part=parts.find(p=>p.partCode===code||p.partNumber===code);
+    // Check part - also try trimmed uppercase/lowercase variants
+    const part=parts.find(p=>
+      p.partCode===code||p.partNumber===code||
+      p.partCode?.toLowerCase()===code.toLowerCase()||
+      p.partNumber?.toLowerCase()===code.toLowerCase()
+    );
     if(part){
       setItems(prev=>{
         const idx=prev.findIndex(i=>i.part&&i.part.id===part.id);
@@ -483,6 +487,9 @@ function UsePartScreen({parts,users,images,navigate,toast}){
         }
         return [...prev,{id:uid(),part,qty:1}];
       });
+    }else{
+      // Show what was scanned so user can compare to part codes
+      toast('No match for: "'+code+'" — check part code matches barcode','warning',8000);
     }
   };
 
@@ -669,7 +676,11 @@ function RestockScreen({parts,images,navigate,toast}){
   const handleScan=val=>{
     const code=val.trim();
     if(!code)return;
-    const part=parts.find(p=>p.partCode===code||p.partNumber===code);
+    const part=parts.find(p=>
+      p.partCode===code||p.partNumber===code||
+      p.partCode?.toLowerCase()===code.toLowerCase()||
+      p.partNumber?.toLowerCase()===code.toLowerCase()
+    );
     if(part){
       setItems(prev=>{
         const idx=prev.findIndex(i=>i.part&&i.part.id===part.id);
