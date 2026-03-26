@@ -27,7 +27,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#2563EB!import
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:4px}
 </style>
 </head>
-<body tabindex="0">
+<body>
 <div id="root"></div>
 <script>
 if('serviceWorker' in navigator)
@@ -273,6 +273,12 @@ function PartSearch({parts,images,label,onSelect}){
     const m=!lq||[p.partCode,p.partNumber,p.partName].some(s=>s?.toLowerCase().includes(lq));
     return m&&(!sup||p.supplier===sup)&&(!bin||p.binNumber===bin);
   }).slice(0,20);
+  // Auto-select on exact match (scanner input)
+  useEffect(()=>{
+    if(!q)return;
+    const exact=parts.find(p=>p.partCode===q||p.partNumber===q);
+    if(exact){pick(exact);}
+  },[q]);
   const pick=p=>{onSelect(p);setQ('');setOpen(false);};
   return(
     <div style={{position:'relative'}}>
@@ -288,6 +294,10 @@ function PartSearch({parts,images,label,onSelect}){
       <div style={{position:'relative'}}>
         <input value={q} onChange={e=>{setQ(e.target.value);setOpen(true);}}
           onFocus={()=>setOpen(true)} onBlur={()=>setTimeout(()=>setOpen(false),200)}
+          onKeyDown={e=>{
+            if(e.key==='Enter'&&results.length===1){pick(results[0]);}
+            else if(e.key==='Enter'&&results.length>0){pick(results[0]);}
+          }}
           placeholder={label||'Search part...'} style={{...inp,paddingRight:46}}/>
         <button onClick={()=>setCam(true)} style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',fontSize:20,color:C.blue}}>📷</button>
       </div>
@@ -512,30 +522,24 @@ function UsePartScreen({parts,users,images,navigate,toast}){
   const [badgeInput,setBadgeInput]=useState('');
   const [items,setItems]=useState([]);
   const [busy,setBusy]=useState(false);
-  const bufRef=useRef('');
-  const timerRef=useRef(null);
 
-  // Global barcode scanner listener — detects USB/Bluetooth scanners
+  // Keep hidden scanner input focused when nothing else is active
+  const scanInputRef=useRef(null);
+  const [scanBuf,setScanBuf]=useState('');
+  const scanBufRef=useRef('');
+
   useEffect(()=>{
-    // Ensure page has focus to capture scanner input
-    document.body.focus();
-    const handleKey=e=>{
+    const refocus=()=>{
       const tag=document.activeElement?.tagName;
-      if(tag==='TEXTAREA'||tag==='INPUT'||tag==='SELECT')return;
-      if(e.key==='Enter'){
-        const code=bufRef.current.trim();
-        bufRef.current='';
-        if(!code)return;
-        handleScan(code);
-      }else if(e.key.length===1){
-        bufRef.current+=e.key;
-        clearTimeout(timerRef.current);
-        timerRef.current=setTimeout(()=>{bufRef.current='';},500);
+      if(tag!=='INPUT'&&tag!=='TEXTAREA'&&tag!=='SELECT'){
+        scanInputRef.current?.focus();
       }
     };
-    window.addEventListener('keydown',handleKey);
-    return()=>{window.removeEventListener('keydown',handleKey);clearTimeout(timerRef.current);};
-  },[users,parts,userId,items]);
+    // Focus hidden input on load and whenever user clicks non-input area
+    scanInputRef.current?.focus();
+    document.addEventListener('click',refocus);
+    return()=>document.removeEventListener('click',refocus);
+  },[]);
 
   const handleScan=useCallback((code)=>{
     // 1. Check badge number first
@@ -606,7 +610,21 @@ function UsePartScreen({parts,users,images,navigate,toast}){
   };
 
   return(
-    <div style={{minHeight:'100vh',background:C.bg,padding:20}} onClick={e=>{if(e.target===e.currentTarget||e.target.tagName==='DIV')document.body.focus();}}>
+    <div style={{minHeight:'100vh',background:C.bg,padding:20}}>
+      {/* Hidden input that captures scanner input when nothing else is focused */}
+      <input ref={scanInputRef} value={scanBuf}
+        onChange={e=>setScanBuf(e.target.value)}
+        onKeyDown={e=>{
+          if(e.key==='Enter'){
+            const code=scanBuf.trim();
+            setScanBuf('');
+            if(code)handleScan(code);
+          }
+        }}
+        style={{position:'fixed',top:-100,left:-100,width:1,height:1,opacity:0,pointerEvents:'none'}}
+        readOnly={false}
+        tabIndex={-1}
+      />
       <div style={{maxWidth:640,margin:'0 auto'}}>
         <button onClick={()=>navigate('home')} style={bBtn}>← Home</button>
         <h2 style={{fontWeight:800,fontSize:30,color:C.txt,margin:'0 0 8px',letterSpacing:'-0.8px'}}>Use Part</h2>
@@ -727,38 +745,17 @@ function AddMenu({navigate,parts,users,images,setImages,toast}){
 function RestockScreen({parts,images,navigate,toast}){
   const [items,setItems]=useState([]);
   const [busy,setBusy]=useState(false);
-  const bufRef=useRef('');
-  const timerRef=useRef(null);
 
   useEffect(()=>{
-    document.body.focus();
-    const handleKey=e=>{
+    const refocus=()=>{
       const tag=document.activeElement?.tagName;
-      if(tag==='TEXTAREA'||tag==='INPUT'||tag==='SELECT')return;
-      if(e.key==='Enter'){
-        const code=bufRef.current.trim();
-        bufRef.current='';
-        if(!code)return;
-        const part=parts.find(p=>p.partCode===code||p.partNumber===code);
-        if(part){
-          setItems(prev=>{
-            const existing=prev.findIndex(i=>i.part&&i.part.id===part.id);
-            if(existing!==-1){
-              const updated=[...prev];
-              updated[existing]={...updated[existing],qty:updated[existing].qty+1};
-              return updated;
-            }
-            return [...prev,{id:uid(),part,qty:1}];
-          });
-        }
-      }else if(e.key.length===1){
-        bufRef.current+=e.key;
-        clearTimeout(timerRef.current);
-        timerRef.current=setTimeout(()=>{bufRef.current='';},500);
+      if(tag!=='INPUT'&&tag!=='TEXTAREA'&&tag!=='SELECT'){
+        restockScanRef.current?.focus();
       }
     };
-    window.addEventListener('keydown',handleKey);
-    return()=>{window.removeEventListener('keydown',handleKey);clearTimeout(timerRef.current);};
+    restockScanRef.current?.focus();
+    document.addEventListener('click',refocus);
+    return()=>document.removeEventListener('click',refocus);
   },[parts]);
 
   const setQty=(id,q)=>setItems(prev=>prev.map(i=>i.id===id?{...i,qty:Math.max(1,q)}:i));
@@ -777,6 +774,30 @@ function RestockScreen({parts,images,navigate,toast}){
 
   return(
     <div style={{minHeight:'100vh',background:C.bg,padding:20}}>
+      <input ref={restockScanRef} value={restockBuf}
+        onChange={e=>setRestockBuf(e.target.value)}
+        onKeyDown={e=>{
+          if(e.key==='Enter'){
+            const code=restockBuf.trim();
+            setRestockBuf('');
+            if(!code)return;
+            const part=parts.find(p=>p.partCode===code||p.partNumber===code);
+            if(part){
+              setItems(prev=>{
+                const existing=prev.findIndex(i=>i.part&&i.part.id===part.id);
+                if(existing!==-1){
+                  const updated=[...prev];
+                  updated[existing]={...updated[existing],qty:updated[existing].qty+1};
+                  return updated;
+                }
+                return [...prev,{id:uid(),part,qty:1}];
+              });
+            }
+          }
+        }}
+        style={{position:'fixed',top:-100,left:-100,width:1,height:1,opacity:0,pointerEvents:'none'}}
+        tabIndex={-1}
+      />
       <div style={{maxWidth:640,margin:'0 auto'}}>
         <button onClick={()=>navigate('addMenu')} style={bBtn}>← Back</button>
         <h2 style={{fontWeight:800,fontSize:30,color:C.txt,margin:'0 0 8px',letterSpacing:'-0.8px'}}>Restock Parts</h2>
