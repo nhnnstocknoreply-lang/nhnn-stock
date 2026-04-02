@@ -469,7 +469,6 @@ function UsePartScreen({parts,users,images,navigate,toast}){
   const [badgeInput,setBadgeInput]=useState('');
   const [items,setItems]=useState([]);
   const [busy,setBusy]=useState(false);
-  const [scanVal,setScanVal]=useState('');
   const scanRef=useRef(null);
   const submitRef=useRef(null);
 
@@ -559,7 +558,7 @@ function UsePartScreen({parts,users,images,navigate,toast}){
     }
     setBusy(false);
     toast('Parts recorded + emails sent!','success');
-    setItems([]);setUserId('');setFoundUser(null);setBadgeInput('');setScanVal('');
+    setItems([]);setUserId('');setFoundUser(null);setBadgeInput('');if(scanRef.current)scanRef.current.value='';
   };
 
   return(
@@ -572,14 +571,13 @@ function UsePartScreen({parts,users,images,navigate,toast}){
         {/* Scanner capture bar */}
         <div style={{position:'sticky',top:0,zIndex:100,background:'rgba(240,242,255,0.97)',backdropFilter:'blur(8px)',paddingBottom:12,marginBottom:4}}>
           <input ref={scanRef}
-            value={scanVal} onChange={e=>setScanVal(e.target.value)}
             onKeyDown={e=>{
               if(e.key==='Enter'){
                 const v=e.target.value.trim();
-                setScanVal('');
-                if(v)handleScan(v);
+                e.target.value='';
                 e.preventDefault();
                 e.stopPropagation();
+                if(v)handleScan(v);
               }
             }}
             placeholder="📷 Ready to scan — point scanner here..."
