@@ -464,102 +464,118 @@ function SettingsScreen({users,saveUsers:su,navigate,toast,resetPin}){
 
 /* ── Use Part ── */
 function UsePartScreen({parts,users,images,navigate,toast}){
-  const [userId,setUserId]=useState('');
-  const [foundUser,setFoundUser]=useState(null);
-  const [badgeInput,setBadgeInput]=useState('');
-  const [items,setItems]=useState([]);
-  const [busy,setBusy]=useState(false);
-  const scanRef=useRef(null);
-  const submitRef=useRef(null);
+  const sessionRef = useRef({userId:'', foundUser:null, items:[]});
+  const [display, setDisplay] = useState({userId:'', foundUser:null, items:[]});
+  const scanRef = useRef(null);
+  const busyRef = useRef(false);
 
-  // Keep scanner input focused
+  const updateSession = (changes) => {
+    sessionRef.current = {...sessionRef.current, ...changes};
+    setDisplay({...sessionRef.current});
+  };
+
   useEffect(()=>{
-    setTimeout(()=>scanRef.current&&scanRef.current.focus(),100);
+    setTimeout(()=>scanRef.current&&scanRef.current.focus(), 100);
   },[]);
 
-  // Keep submitRef current so handleScan can call it
-  useEffect(()=>{
-    submitRef.current=submit;
-  });
+  const handleScan = (code) => {
+    if(!code) return;
+    const {userId, foundUser, items} = sessionRef.current;
 
-  const handleScan=val=>{
-    const code=val.trim();
-    if(!code)return;
-
-    // If badge already scanned and same badge scanned again → auto submit
-    if(userId&&foundUser&&foundUser.badge===code){
-      submitRef.current&&submitRef.current();
+    // Badge re-scan = auto submit
+    if(userId && foundUser && foundUser.badge === code){
+      doSubmit();
       return;
     }
 
-    // Check badge — only if no user yet
+    // Badge scan — only if no user yet
     if(!userId){
-      const user=(users||[]).find(u=>u.badge&&u.badge===code);
-      if(user){setUserId(user.id);setFoundUser(user);return;}
+      const user = (users||[]).find(u => u.badge && u.badge === code);
+      if(user){ updateSession({userId: user.id, foundUser: user}); return; }
     }
 
-    // Check part
-    const part=parts.find(p=>
-      p.partCode===code||p.partNumber===code||
-      p.partCode?.toLowerCase()===code.toLowerCase()||
-      p.partNumber?.toLowerCase()===code.toLowerCase()
+    // Part scan — exact match only
+    const part = parts.find(p =>
+      p.partCode === code || p.partNumber === code ||
+      p.partCode?.toLowerCase() === code.toLowerCase() ||
+      p.partNumber?.toLowerCase() === code.toLowerCase()
     );
     if(part){
-      setItems(prev=>{
-        const idx=prev.findIndex(i=>i.part&&i.part.id===part.id);
-        if(idx!==-1){
-          const updated=[...prev];
-          const newQty=Math.min(updated[idx].qty+1,part.currentStock);
-          updated[idx]={...updated[idx],qty:newQty};
-          return updated;
-        }
-        return [...prev,{id:uid(),part,qty:1}];
-      });
+      const existing = items.findIndex(i => i.part && i.part.id === part.id);
+      let newItems;
+      if(existing !== -1){
+        newItems = [...items];
+        newItems[existing] = {...newItems[existing], qty: Math.min(newItems[existing].qty+1, part.currentStock)};
+      } else {
+        newItems = [...items, {id:uid(), part, qty:1}];
+      }
+      updateSession({items: newItems});
       return;
     }
 
-    // No match — show warning but DO NOT clear anything
-    toast('No match for: "'+code+'"','warning',5000);
+    // No match — do nothing except show toast
+    toast('No match for: "'+code+'"', 'warning', 4000);
   };
 
-  const setQty=(id,q)=>setItems(prev=>prev.map(i=>i.id===id?{...i,qty:Math.max(1,Math.min(q,i.part?i.part.currentStock:9999))}:i));
+  const setQty = (id, q) => {
+    const newItems = sessionRef.current.items.map(i =>
+      i.id===id ? {...i, qty:Math.max(1, Math.min(q, i.part ? i.part.currentStock : 9999))} : i
+    );
+    updateSession({items: newItems});
+  };
 
-  const submit=async()=>{
-    if(!userId){toast('Scan your badge or select your name','error');return;}
-    const valid=items.filter(i=>i.part);
-    if(!valid.length){toast('Scan or select at least one part','error');return;}
+  const removeItem = (id) => {
+    updateSession({items: sessionRef.current.items.filter(i => i.id !== id)});
+  };
+
+  const resetSession = () => {
+    sessionRef.current = {userId:'', foundUser:null, items:[]};
+    setDisplay({userId:'', foundUser:null, items:[]});
+    if(scanRef.current) scanRef.current.value = '';
+  };
+
+  const doSubmit = async () => {
+    if(busyRef.current) return;
+    const {userId, foundUser, items} = sessionRef.current;
+    if(!userId){ toast('Scan your badge first','error'); return; }
+    const valid = items.filter(i => i.part);
+    if(!valid.length){ toast('Scan at least one part','error'); return; }
     for(const it of valid){
-      if(it.part.currentStock===0){toast('"'+it.part.partName+'" is out of stock','error');return;}
-      if(it.qty>it.part.currentStock){toast('Only '+it.part.currentStock+' of "'+it.part.partName+'" available','error');return;}
+      if(it.part.currentStock===0){ toast('"'+it.part.partName+'" is out of stock','error'); return; }
+      if(it.qty>it.part.currentStock){ toast('Only '+it.part.currentStock+' of "'+it.part.partName+'" available','error'); return; }
     }
-    setBusy(true);
-    const user=users.find(u=>u.id===userId);
-    const allEmails=users.map(u=>u.email).filter(Boolean);
-    let np=[...parts];
-    const alerts=[];
+    busyRef.current = true;
+    setDisplay(d => ({...d, busy:true}));
+    const user = users.find(u => u.id === userId);
+    const allEmails = users.map(u => u.email).filter(Boolean);
+    let np = [...parts];
+    const alerts = [];
     for(const it of valid){
-      const i=np.findIndex(p=>p.id===it.part.id);
-      if(i===-1)continue;
-      const ns=np[i].currentStock-it.qty;
-      const ms=np[i].minimumStock;
-      np[i]={...np[i],currentStock:ns,updatedAt:new Date().toISOString()};
-      if(ns===0)alerts.push({p:np[i],label:'OUT OF STOCK'});
-      else if(ns<ms)alerts.push({p:np[i],label:'BELOW MINIMUM ('+ns+' left)'});
-      else if(ns===ms)alerts.push({p:np[i],label:'AT MINIMUM ('+ns+' left)'});
-      else if(ns===ms+1)alerts.push({p:np[i],label:'NEARING MINIMUM ('+ns+' left)'});
+      const i = np.findIndex(p => p.id === it.part.id);
+      if(i===-1) continue;
+      const ns = np[i].currentStock - it.qty;
+      const ms = np[i].minimumStock;
+      np[i] = {...np[i], currentStock:ns, updatedAt:new Date().toISOString()};
+      if(ns===0) alerts.push({p:np[i], label:'OUT OF STOCK'});
+      else if(ns<ms) alerts.push({p:np[i], label:'BELOW MINIMUM ('+ns+' left)'});
+      else if(ns===ms) alerts.push({p:np[i], label:'AT MINIMUM ('+ns+' left)'});
+      else if(ns===ms+1) alerts.push({p:np[i], label:'NEARING MINIMUM ('+ns+' left)'});
     }
     await saveParts(np);
-    await sendEmail([user.email],'Parts Used — NHNN Stock Control',
+    await sendEmail([user.email], 'Parts Used — NHNN Stock Control',
       emailBody('Parts used by '+user.name+' on '+new Date().toLocaleString(),
-        valid.map(it=>[it.part.partName,it.qty+' unit(s) — Code: '+it.part.partCode+' — Bin: '+it.part.binNumber])));
+        valid.map(it=>[it.part.partName, it.qty+' unit(s) — Code: '+it.part.partCode+' — Bin: '+it.part.binNumber])));
     for(const a of alerts){
-      await sendEmail(allEmails,'Stock Alert: '+a.p.partName+' — '+a.label,
+      await sendEmail(allEmails, 'Stock Alert: '+a.p.partName+' — '+a.label,
         emailBody(a.label,[['Part',a.p.partName],['Code',a.p.partCode],['Bin',a.p.binNumber||'N/A'],['Stock now',a.p.currentStock+' units'],['Min stock',a.p.minimumStock+' units'],['Recorded by',user.name]]));
     }
-    setBusy(false);
+    busyRef.current = false;
     toast('Parts recorded + emails sent!','success');
-    setItems([]);setUserId('');setFoundUser(null);setBadgeInput('');if(scanRef.current)scanRef.current.value='';
+    resetSession();
   };
+
+  const {userId, foundUser, items} = display;
+  const busy = display.busy || false;
 
   return(
     <div style={{minHeight:'100vh',background:C.bg,padding:20}}>
@@ -568,16 +584,16 @@ function UsePartScreen({parts,users,images,navigate,toast}){
         <h2 style={{fontWeight:800,fontSize:30,color:C.txt,margin:'0 0 8px',letterSpacing:'-0.8px'}}>Use Part</h2>
         <p style={{color:C.sub,fontSize:13,margin:'0 0 16px'}}>Scan your badge then scan parts, or use the fields below.</p>
 
-        {/* Scanner capture bar */}
+        {/* Scanner bar */}
         <div style={{position:'sticky',top:0,zIndex:100,background:'rgba(240,242,255,0.97)',backdropFilter:'blur(8px)',paddingBottom:12,marginBottom:4}}>
           <input ref={scanRef}
             onKeyDown={e=>{
               if(e.key==='Enter'){
-                const v=e.target.value.trim();
-                e.target.value='';
+                const v = e.target.value.trim();
+                e.target.value = '';
                 e.preventDefault();
                 e.stopPropagation();
-                if(v)handleScan(v);
+                if(v) handleScan(v);
               }
             }}
             placeholder="📷 Ready to scan — point scanner here..."
@@ -586,22 +602,23 @@ function UsePartScreen({parts,users,images,navigate,toast}){
           />
         </div>
 
+        {/* Who are you */}
         <div style={{...card,marginBottom:14}}>
           <p style={{color:'#94A3B8',fontSize:11,fontWeight:700,letterSpacing:'.5px',textTransform:'uppercase',margin:'0 0 10px'}}>Who are you?</p>
           {!foundUser?(
             <div style={{position:'relative'}}>
-              <input value={badgeInput}
-                onChange={e=>{
-                  const v=e.target.value;
-                  setBadgeInput(v);
-                  const user=(users||[]).find(u=>u.badge&&u.badge===v);
-                  if(user){setUserId(user.id);setFoundUser(user);setBadgeInput('');}
-                }}
+              <input
                 onKeyDown={e=>{
                   if(e.key==='Enter'){
-                    const user=(users||[]).find(u=>u.badge&&u.badge===badgeInput);
-                    if(user){setUserId(user.id);setFoundUser(user);setBadgeInput('');}
+                    const v = e.target.value.trim();
+                    const user = (users||[]).find(u => u.badge && u.badge===v);
+                    if(user){ updateSession({userId:user.id, foundUser:user}); e.target.value=''; }
                   }
+                }}
+                onChange={e=>{
+                  const v = e.target.value;
+                  const user = (users||[]).find(u => u.badge && u.badge===v);
+                  if(user){ updateSession({userId:user.id, foundUser:user}); e.target.value=''; }
                 }}
                 placeholder="Type badge number manually..."
                 style={{...inp,paddingRight:44}} autoComplete="off"/>
@@ -613,17 +630,19 @@ function UsePartScreen({parts,users,images,navigate,toast}){
                 <div style={{fontWeight:700,color:C.txt,fontSize:15}}>{foundUser.name}</div>
                 <div style={{color:C.sub,fontSize:12}}>Badge: {foundUser.badge} · {foundUser.email}</div>
               </div>
-              <button onClick={()=>{setFoundUser(null);setUserId('');}} style={{...btn,background:'none',color:C.sub,border:'none',fontSize:18,padding:'4px 8px'}}>✕</button>
+              <button onClick={()=>updateSession({userId:'',foundUser:null})} style={{...btn,background:'none',color:C.sub,border:'none',fontSize:18,padding:'4px 8px'}}>✕</button>
             </div>
           )}
         </div>
 
+        {/* Parts list */}
         {items.length>0&&(
           <div style={{...card,marginBottom:14}}>
             <p style={{color:'#94A3B8',fontSize:11,fontWeight:700,letterSpacing:'.5px',textTransform:'uppercase',margin:'0 0 12px'}}>Parts to use ({items.length})</p>
             {items.map((it,idx)=>(
               <div key={it.id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:idx<items.length-1?'1px solid #F1F5F9':'none'}}>
-                {(images&&images[it.part.partCode])?<img src={images[it.part.partCode]} style={{width:56,height:56,objectFit:'cover',borderRadius:8,flexShrink:0,border:'1.5px solid #E2E8F0'}}/>
+                {(images&&images[it.part.partCode])
+                  ?<img src={images[it.part.partCode]} style={{width:56,height:56,objectFit:'cover',borderRadius:8,flexShrink:0,border:'1.5px solid #E2E8F0'}}/>
                   :<div style={{width:56,height:56,background:'#F1F5F9',borderRadius:8,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22}}>📦</div>}
                 <div style={{flex:1}}>
                   <div style={{fontWeight:700,color:C.txt,fontSize:14}}>{it.part.partName}</div>
@@ -634,29 +653,31 @@ function UsePartScreen({parts,users,images,navigate,toast}){
                   <button onClick={()=>setQty(it.id,it.qty-1)} style={{...btn,background:'#F1F5F9',color:C.txt,width:32,height:32,padding:0,fontSize:16}}>−</button>
                   <span style={{fontWeight:700,fontSize:16,minWidth:24,textAlign:'center'}}>{it.qty}</span>
                   <button onClick={()=>setQty(it.id,it.qty+1)} style={{...btn,background:'#F1F5F9',color:C.txt,width:32,height:32,padding:0,fontSize:16}}>+</button>
-                  <button onClick={()=>setItems(p=>p.filter(i=>i.id!==it.id))} style={{...btn,background:'#FEF2F2',color:C.red,border:'1px solid #FEE2E2',width:32,height:32,padding:0,marginLeft:4}}>✕</button>
+                  <button onClick={()=>removeItem(it.id)} style={{...btn,background:'#FEF2F2',color:C.red,border:'1px solid #FEE2E2',width:32,height:32,padding:0,marginLeft:4}}>✕</button>
                 </div>
               </div>
             ))}
           </div>
         )}
 
+        {/* Manual search */}
         <div style={{...card,marginBottom:14}}>
           <p style={{color:'#94A3B8',fontSize:11,fontWeight:700,letterSpacing:'.5px',textTransform:'uppercase',margin:'0 0 10px'}}>Search Part Manually</p>
           <PartSearch parts={parts} images={images} label="Search by code, name or number" onSelect={p=>{
-            setItems(prev=>{
-              const idx=prev.findIndex(i=>i.part&&i.part.id===p.id);
-              if(idx!==-1){
-                const updated=[...prev];
-                updated[idx]={...updated[idx],qty:Math.min(updated[idx].qty+1,p.currentStock)};
-                return updated;
-              }
-              return [...prev,{id:uid(),part:p,qty:1}];
-            });
+            const {items} = sessionRef.current;
+            const existing = items.findIndex(i => i.part && i.part.id===p.id);
+            let newItems;
+            if(existing!==-1){
+              newItems = [...items];
+              newItems[existing] = {...newItems[existing], qty:Math.min(newItems[existing].qty+1, p.currentStock)};
+            } else {
+              newItems = [...items, {id:uid(), part:p, qty:1}];
+            }
+            updateSession({items: newItems});
           }}/>
         </div>
 
-        <button onClick={submit} disabled={busy||!items.length||!userId}
+        <button onClick={doSubmit} disabled={busy||!items.length||!userId}
           style={{...btn,background:items.length&&userId?C.blue:'#CBD5E1',color:'#fff',padding:'16px 20px',width:'100%',fontSize:16,opacity:busy?.7:1}}>
           {busy?'Processing...':'Confirm + Send Email'+(items.length?' ('+items.length+' part'+(items.length>1?'s':'')+')':'')}
         </button>
