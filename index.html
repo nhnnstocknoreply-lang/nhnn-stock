@@ -456,21 +456,35 @@ function UsePartScreen({parts,users,images,navigate,toast}){
   const [busy,setBusy]=useState(false);
   const [scanVal,setScanVal]=useState('');
   const scanRef=useRef(null);
+  const submitRef=useRef(null);
 
   // Keep scanner input focused
   useEffect(()=>{
     setTimeout(()=>scanRef.current&&scanRef.current.focus(),100);
   },[]);
 
+  // Keep submitRef current so handleScan can call it
+  useEffect(()=>{
+    submitRef.current=submit;
+  });
+
   const handleScan=val=>{
     const code=val.trim();
     if(!code)return;
-    // Check badge first
+
+    // If badge already scanned and same badge scanned again → auto submit
+    if(userId&&foundUser&&foundUser.badge===code){
+      submitRef.current&&submitRef.current();
+      return;
+    }
+
+    // Check badge — only if no user yet
     if(!userId){
       const user=(users||[]).find(u=>u.badge&&u.badge===code);
       if(user){setUserId(user.id);setFoundUser(user);return;}
     }
-    // Check part - also try trimmed uppercase/lowercase variants
+
+    // Check part
     const part=parts.find(p=>
       p.partCode===code||p.partNumber===code||
       p.partCode?.toLowerCase()===code.toLowerCase()||
@@ -487,10 +501,11 @@ function UsePartScreen({parts,users,images,navigate,toast}){
         }
         return [...prev,{id:uid(),part,qty:1}];
       });
-    }else{
-      // Show what was scanned so user can compare to part codes
-      toast('No match for: "'+code+'" — check part code matches barcode','warning',8000);
+      return;
     }
+
+    // No match — show warning but DO NOT clear anything
+    toast('No match for: "'+code+'"','warning',5000);
   };
 
   const setQty=(id,q)=>setItems(prev=>prev.map(i=>i.id===id?{...i,qty:Math.max(1,Math.min(q,i.part?i.part.currentStock:9999))}:i));
@@ -545,9 +560,10 @@ function UsePartScreen({parts,users,images,navigate,toast}){
             value={scanVal} onChange={e=>setScanVal(e.target.value)}
             onKeyDown={e=>{
               if(e.key==='Enter'){
-                const v=scanVal.trim();
+                const v=e.target.value.trim();
                 setScanVal('');
-                handleScan(v);
+                if(v)handleScan(v);
+                e.preventDefault();
               }
             }}
             placeholder="📷 Ready to scan — point scanner here..."
@@ -672,6 +688,11 @@ function RestockScreen({parts,images,navigate,toast}){
   useEffect(()=>{
     setTimeout(()=>scanRef.current&&scanRef.current.focus(),100);
   },[]);
+
+  // Keep submitRef current so handleScan can call it
+  useEffect(()=>{
+    submitRef.current=submit;
+  });
 
   const handleScan=val=>{
     const code=val.trim();
