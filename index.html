@@ -905,19 +905,19 @@ function RestockScreen({parts,images,navigate,toast}){
           <div style={{...card,marginBottom:14}}>
             <p style={{color:'#94A3B8',fontSize:11,fontWeight:700,letterSpacing:'.5px',textTransform:'uppercase',margin:'0 0 12px'}}>Parts to restock ({items.length})</p>
             {items.map((it,idx)=>(
-              <div key={it.id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:idx<items.length-1?'1px solid #F1F5F9':'none'}}>
-                {(images&&images[it.part.partCode])?<img src={images[it.part.partCode]} style={{width:56,height:56,objectFit:'cover',borderRadius:8,flexShrink:0,border:'1.5px solid #E2E8F0'}}/>
-                  :<div style={{width:56,height:56,background:'#F1F5F9',borderRadius:8,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22}}>📦</div>}
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:700,color:C.txt,fontSize:14}}>{it.part.partName}</div>
-                  <div style={{color:C.sub,fontSize:12}}>{it.part.partCode} · Bin: {it.part.binNumber}</div>
-                  <div style={{color:C.green,fontSize:12}}>Current: {it.part.currentStock} → After: {it.part.currentStock+it.qty}</div>
-                </div>
-                <div style={{display:'flex',alignItems:'center',gap:6}}>
-                  <button onClick={()=>setQty(it.id,it.qty-1)} style={{...btn,background:'#F1F5F9',color:C.txt,width:32,height:32,padding:0,fontSize:16}}>−</button>
-                  <span style={{fontWeight:700,fontSize:16,minWidth:24,textAlign:'center'}}>{it.qty}</span>
-                  <button onClick={()=>setQty(it.id,it.qty+1)} style={{...btn,background:'#F1F5F9',color:C.txt,width:32,height:32,padding:0,fontSize:16}}>+</button>
-                  <button onClick={()=>setItems(p=>p.filter(i=>i.id!==it.id))} style={{...btn,background:'#FEF2F2',color:C.red,border:'1px solid #FEE2E2',width:32,height:32,padding:0,marginLeft:4}}>✕</button>
+              <div key={it.id} style={{display:'flex',alignItems:'center',gap:16,padding:'14px 0',borderBottom:idx<items.length-1?'1px solid #F1F5F9':'none'}}>
+                {(images&&images[it.part.partCode])?<img src={images[it.part.partCode]} style={{width:100,height:100,objectFit:'cover',borderRadius:14,flexShrink:0,border:'1.5px solid #E2E8F0',boxShadow:'0 2px 8px rgba(15,23,42,.08)'}}/>
+                  :<div style={{width:100,height:100,background:'#F1F5F9',borderRadius:14,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:36}}>📦</div>}
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:700,color:C.txt,fontSize:16,marginBottom:4,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{it.part.partName}</div>
+                  <div style={{color:C.sub,fontSize:13,marginBottom:4}}>{it.part.partCode} · Bin: {it.part.binNumber}</div>
+                  <div style={{color:C.green,fontSize:13,fontWeight:600}}>Current: {it.part.currentStock} → After: {it.part.currentStock+it.qty}</div>
+                  <div style={{display:'flex',alignItems:'center',gap:8,marginTop:10}}>
+                    <button onClick={()=>setQty(it.id,it.qty-1)} style={{...btn,background:'#F1F5F9',color:C.txt,width:36,height:36,padding:0,fontSize:18}}>−</button>
+                    <span style={{fontWeight:800,fontSize:20,minWidth:32,textAlign:'center'}}>{it.qty}</span>
+                    <button onClick={()=>setQty(it.id,it.qty+1)} style={{...btn,background:'#F1F5F9',color:C.txt,width:36,height:36,padding:0,fontSize:18}}>+</button>
+                    <button onClick={()=>setItems(p=>p.filter(i=>i.id!==it.id))} style={{...btn,background:'#FEF2F2',color:C.red,border:'1px solid #FEE2E2',width:36,height:36,padding:0,marginLeft:8}}>✕</button>
+                  </div>
                 </div>
               </div>
             ))}
