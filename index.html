@@ -277,15 +277,119 @@ function HomeScreen({navigate,users}){
     {key:'import',icon:'📥',label:'Import Excel',desc:'Bulk upload from spreadsheet',accent:'#7C3AED',bg:'#F5F3FF'},
     {key:'export',icon:'📤',label:'Export Stock',desc:'Download or email stock list',accent:'#D97706',bg:'#FFFBEB'},
   ];
+
+  const [time,setTime]=useState(new Date());
+  const [weather,setWeather]=useState(null);
+
+  // Live clock
+  useEffect(()=>{
+    const t=setInterval(()=>setTime(new Date()),1000);
+    return()=>clearInterval(t);
+  },[]);
+
+  // Weather — Open-Meteo, London coords, no API key needed
+  useEffect(()=>{
+    const fetchWeather=async()=>{
+      try{
+        const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude=51.5085&longitude=-0.1257&current=temperature_2m,weathercode,windspeed_10m&timezone=Europe/London');
+        const d=await r.json();
+        const code=d.current.weathercode;
+        const temp=Math.round(d.current.temperature_2m);
+        const wind=Math.round(d.current.windspeed_10m);
+        // Map WMO weather codes to condition
+        let condition,emoji;
+        if(code===0){condition='Clear Sky';emoji='sunny';}
+        else if(code<=2){condition='Partly Cloudy';emoji='partly';}
+        else if(code<=3){condition='Overcast';emoji='cloudy';}
+        else if(code<=49){condition='Foggy';emoji='foggy';}
+        else if(code<=59){condition='Drizzle';emoji='drizzle';}
+        else if(code<=69){condition='Rainy';emoji='rain';}
+        else if(code<=79){condition='Snowy';emoji='snow';}
+        else if(code<=82){condition='Rain Showers';emoji='rain';}
+        else if(code<=86){condition='Snow Showers';emoji='snow';}
+        else{condition='Thunderstorm';emoji='storm';}
+        setWeather({temp,condition,emoji,wind});
+      }catch(e){console.error('weather',e);}
+    };
+    fetchWeather();
+    const t=setInterval(fetchWeather,30*60*1000);
+    return()=>clearInterval(t);
+  },[]);
+
+  const hour=time.getHours();
+  const greeting=hour<12?'Good morning':hour<17?'Good afternoon':'Good evening';
+
+  const WeatherIcon=({type,size=52})=>{
+    const s=size;
+    if(type==='sunny') return(
+      <div style={{position:'relative',width:s,height:s,display:'flex',alignItems:'center',justifyContent:'center'}}>
+        <div style={{width:s*0.45,height:s*0.45,borderRadius:'50%',background:'linear-gradient(135deg,#FDE68A,#F59E0B)',boxShadow:'0 0 '+(s*0.3)+'px #FCD34D',animation:'spin 8s linear infinite'}}/>
+        {[0,45,90,135,180,225,270,315].map(a=>(
+          <div key={a} style={{position:'absolute',width:s*0.08,height:s*0.18,background:'#F59E0B',borderRadius:4,top:'50%',left:'50%',transformOrigin:'50% '+(s*0.52)+'px',transform:'translateX(-50%) rotate('+a+'deg) translateY(-'+(s*0.52)+'px)',animation:'pulse 2s ease-in-out infinite',animationDelay:(a/45*0.25)+'s'}}/>
+        ))}
+      </div>
+    );
+    if(type==='partly') return(
+      <div style={{position:'relative',width:s,height:s}}>
+        <div style={{position:'absolute',top:0,left:s*0.15,width:s*0.5,height:s*0.5,borderRadius:'50%',background:'linear-gradient(135deg,#FDE68A,#F59E0B)',boxShadow:'0 0 '+(s*0.2)+'px #FCD34D'}}/>
+        <div style={{position:'absolute',bottom:s*0.05,left:0,width:s*0.85,height:s*0.45,borderRadius:s*0.22,background:'linear-gradient(135deg,#fff,#E2E8F0)',boxShadow:'0 4px 12px rgba(0,0,0,0.1)',animation:'float 3s ease-in-out infinite'}}/>
+        <div style={{position:'absolute',bottom:s*0.22,left:s*0.12,width:s*0.5,height:s*0.3,borderRadius:s*0.15,background:'linear-gradient(135deg,#fff,#E2E8F0)'}}/>
+      </div>
+    );
+    if(type==='cloudy') return(
+      <div style={{position:'relative',width:s,height:s}}>
+        <div style={{position:'absolute',top:s*0.1,left:s*0.05,width:s*0.6,height:s*0.35,borderRadius:s*0.18,background:'linear-gradient(135deg,#CBD5E1,#94A3B8)',animation:'float 4s ease-in-out infinite'}}/>
+        <div style={{position:'absolute',top:s*0.22,left:s*0.08,width:s*0.38,height:s*0.22,borderRadius:s*0.11,background:'linear-gradient(135deg,#CBD5E1,#94A3B8)'}}/>
+        <div style={{position:'absolute',bottom:s*0.08,left:s*0.1,width:s*0.8,height:s*0.42,borderRadius:s*0.21,background:'linear-gradient(135deg,#E2E8F0,#CBD5E1)',boxShadow:'0 4px 12px rgba(0,0,0,0.08)',animation:'float 3s ease-in-out infinite',animationDelay:'0.5s'}}/>
+        <div style={{position:'absolute',bottom:s*0.25,left:s*0.2,width:s*0.48,height:s*0.3,borderRadius:s*0.15,background:'linear-gradient(135deg,#E2E8F0,#CBD5E1)'}}/>
+      </div>
+    );
+    if(type==='rain'||type==='drizzle') return(
+      <div style={{position:'relative',width:s,height:s}}>
+        <div style={{position:'absolute',top:s*0.05,left:s*0.08,width:s*0.8,height:s*0.42,borderRadius:s*0.21,background:'linear-gradient(135deg,#94A3B8,#64748B)',boxShadow:'0 4px 12px rgba(0,0,0,0.15)'}}/>
+        <div style={{position:'absolute',top:s*0.18,left:s*0.18,width:s*0.5,height:s*0.28,borderRadius:s*0.14,background:'linear-gradient(135deg,#94A3B8,#64748B)'}}/>
+        {[0,1,2,3,4].map(i=>(
+          <div key={i} style={{position:'absolute',bottom:s*(0.02+i*0.04),left:s*(0.15+i*0.15),width:2,height:s*0.18,background:'#60A5FA',borderRadius:2,animation:'rain 1.2s linear infinite',animationDelay:(i*0.2)+'s',transform:'rotate(15deg)'}}/>
+        ))}
+      </div>
+    );
+    if(type==='snow') return(
+      <div style={{position:'relative',width:s,height:s}}>
+        <div style={{position:'absolute',top:s*0.05,left:s*0.08,width:s*0.8,height:s*0.42,borderRadius:s*0.21,background:'linear-gradient(135deg,#CBD5E1,#94A3B8)'}}/>
+        {[0,1,2,3,4].map(i=>(
+          <div key={i} style={{position:'absolute',bottom:s*(0.02+i*0.04),left:s*(0.1+i*0.18),fontSize:s*0.18,animation:'snow 2s linear infinite',animationDelay:(i*0.4)+'s'}}>❄️</div>
+        ))}
+      </div>
+    );
+    if(type==='storm') return(
+      <div style={{position:'relative',width:s,height:s}}>
+        <div style={{position:'absolute',top:0,left:s*0.05,width:s*0.9,height:s*0.45,borderRadius:s*0.22,background:'linear-gradient(135deg,#475569,#334155)'}}/>
+        <div style={{position:'absolute',top:s*0.15,left:s*0.18,width:s*0.55,height:s*0.3,borderRadius:s*0.15,background:'linear-gradient(135deg,#475569,#334155)'}}/>
+        <div style={{position:'absolute',bottom:0,left:'50%',transform:'translateX(-50%)',fontSize:s*0.55,animation:'flash 2s ease-in-out infinite'}}>⚡</div>
+      </div>
+    );
+    if(type==='foggy') return(
+      <div style={{position:'relative',width:s,height:s,display:'flex',flexDirection:'column',justifyContent:'center',gap:s*0.1}}>
+        {[0,1,2].map(i=>(
+          <div key={i} style={{height:s*0.12,borderRadius:s*0.06,background:'rgba(148,163,184,0.6)',animation:'fog 3s ease-in-out infinite',animationDelay:(i*0.5)+'s',marginLeft:i===1?s*0.15:0,marginRight:i===1?0:s*0.15}}/>
+        ))}
+      </div>
+    );
+    return <span style={{fontSize:s*0.7}}>🌡️</span>;
+  };
+
   return(
     <div style={{minHeight:'100vh',background:'#F0F2FF',position:'relative',overflow:'hidden',display:'flex',flexDirection:'column'}}>
+      {/* Background blobs */}
       <div style={{position:'absolute',inset:0,pointerEvents:'none'}}>
         <div style={{position:'absolute',top:-100,left:-80,width:440,height:440,borderRadius:'50%',background:'radial-gradient(circle,#C7D2FE,transparent 70%)',opacity:.7}}/>
         <div style={{position:'absolute',top:'15%',right:-100,width:480,height:380,borderRadius:'50%',background:'radial-gradient(circle,#FBC8D4,transparent 70%)',opacity:.6}}/>
         <div style={{position:'absolute',bottom:-60,left:'10%',width:460,height:360,borderRadius:'50%',background:'radial-gradient(circle,#DDD6FE,transparent 70%)',opacity:.55}}/>
         <div style={{position:'absolute',bottom:'8%',right:'-5%',width:320,height:320,borderRadius:'50%',background:'radial-gradient(circle,#FED7AA,transparent 70%)',opacity:.5}}/>
       </div>
+
       <div style={{position:'relative',zIndex:1,display:'flex',flexDirection:'column',flex:1}}>
+        {/* Header */}
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'20px 24px'}}>
           <div style={{display:'flex',alignItems:'center',gap:12}}>
             <img src={LOGO_B64} style={{width:46,height:46,borderRadius:'50%',border:'2.5px solid '+C.blue,boxShadow:'0 0 0 3px rgba(37,99,235,.12)',objectFit:'cover'}} alt="NHNN"/>
@@ -296,25 +400,68 @@ function HomeScreen({navigate,users}){
           </div>
           <button onClick={()=>navigate('settings')} style={{...btn,background:'rgba(255,255,255,.8)',border:'1.5px solid #E2E8F0',color:C.sub,padding:'10px 12px',fontSize:18}}>⚙️</button>
         </div>
+
         <div style={{flex:1,display:'flex',flexDirection:'column',justifyContent:'center',padding:'0 24px 32px'}}>
-          <h1 style={{fontSize:36,fontWeight:800,color:C.txt,margin:'0 0 6px',letterSpacing:'-1px',lineHeight:1.15}}>What would you<br/>like to do?</h1>
-          <p style={{color:C.sub,fontSize:14,margin:'0 0 28px'}}>{new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</p>
+
+          {/* Weather + Time card */}
+          <div style={{background:'rgba(255,255,255,0.65)',backdropFilter:'blur(16px)',border:'1.5px solid rgba(255,255,255,0.9)',borderRadius:24,padding:'20px 24px',marginBottom:20,boxShadow:'0 4px 24px rgba(15,23,42,0.08)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <div>
+              <div style={{color:C.sub,fontSize:13,marginBottom:2}}>{greeting}</div>
+              <div style={{color:C.txt,fontWeight:800,fontSize:32,letterSpacing:'-1px',lineHeight:1}}>
+                {time.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}
+              </div>
+              <div style={{color:C.sub,fontSize:13,marginTop:4}}>
+                {time.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
+              </div>
+              {weather&&(
+                <div style={{marginTop:10,display:'flex',alignItems:'center',gap:16}}>
+                  <div>
+                    <span style={{fontSize:28,fontWeight:800,color:C.txt}}>{weather.temp}°C</span>
+                    <span style={{color:C.sub,fontSize:13,marginLeft:8}}>{weather.condition}</span>
+                  </div>
+                  <div style={{color:'#94A3B8',fontSize:12}}>💨 {weather.wind} km/h</div>
+                </div>
+              )}
+              {!weather&&<div style={{color:'#94A3B8',fontSize:12,marginTop:8}}>Loading weather...</div>}
+            </div>
+            {weather&&(
+              <div style={{flexShrink:0}}>
+                <WeatherIcon type={weather.emoji} size={72}/>
+              </div>
+            )}
+          </div>
+
+          {/* Heading */}
+          <h1 style={{fontSize:28,fontWeight:800,color:C.txt,margin:'0 0 16px',letterSpacing:'-0.8px',lineHeight:1.2}}>What would you like to do?</h1>
+
+          {/* Tiles */}
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
             {tiles.map(t=>(
               <button key={t.key} onClick={()=>navigate(t.key)}
-                style={{background:'rgba(255,255,255,.75)',backdropFilter:'blur(12px)',border:'1.5px solid rgba(255,255,255,.9)',borderRadius:20,padding:'28px 24px',cursor:'pointer',textAlign:'left',fontFamily:'inherit',boxShadow:'0 2px 12px rgba(15,23,42,.08)',transition:'all .2s'}}
+                style={{background:'rgba(255,255,255,.75)',backdropFilter:'blur(12px)',border:'1.5px solid rgba(255,255,255,.9)',borderRadius:20,padding:'22px 18px',cursor:'pointer',textAlign:'left',fontFamily:'inherit',boxShadow:'0 2px 12px rgba(15,23,42,.08)',transition:'all .2s'}}
                 onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 12px 28px '+t.accent+'30';e.currentTarget.style.borderColor=t.accent;}}
                 onMouseLeave={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='0 2px 12px rgba(15,23,42,.08)';e.currentTarget.style.borderColor='rgba(255,255,255,.9)';}}>
-                <div style={{width:52,height:52,borderRadius:14,background:t.bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:26,marginBottom:16,border:'1px solid '+t.accent+'20'}}>{t.icon}</div>
-                <div style={{color:C.txt,fontWeight:700,fontSize:17,marginBottom:5}}>{t.label}</div>
-                <div style={{color:C.sub,fontSize:13}}>{t.desc}</div>
+                <div style={{width:48,height:48,borderRadius:14,background:t.bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,marginBottom:14,border:'1px solid '+t.accent+'20'}}>{t.icon}</div>
+                <div style={{color:C.txt,fontWeight:700,fontSize:16,marginBottom:4}}>{t.label}</div>
+                <div style={{color:C.sub,fontSize:12}}>{t.desc}</div>
               </button>
             ))}
           </div>
-          {(!users||users.length===0)&&<div style={{background:'rgba(255,251,235,.9)',border:'1.5px solid #FCD34D',borderRadius:12,padding:'12px 16px',fontSize:13,color:'#92400E',textAlign:'center',marginTop:18}}>⚠️ No users yet — go to Settings to add staff.</div>}
+
+          {(!users||users.length===0)&&<div style={{background:'rgba(255,251,235,.9)',border:'1.5px solid #FCD34D',borderRadius:12,padding:'12px 16px',fontSize:13,color:'#92400E',textAlign:'center',marginTop:16}}>⚠️ No users yet — go to Settings to add staff.</div>}
         </div>
         <p style={{color:'#94A3B8',fontSize:11,textAlign:'center',paddingBottom:16}}>NHNN Stock Control v1.0</p>
       </div>
+
+      <style>{`
+        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+        @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+        @keyframes rain { 0%{transform:rotate(15deg) translateY(-10px);opacity:0} 50%{opacity:1} 100%{transform:rotate(15deg) translateY(10px);opacity:0} }
+        @keyframes snow { 0%{transform:translateY(-5px) rotate(0deg);opacity:0} 50%{opacity:1} 100%{transform:translateY(10px) rotate(180deg);opacity:0} }
+        @keyframes flash { 0%,100%{opacity:0.3} 50%{opacity:1} }
+        @keyframes fog { 0%,100%{transform:translateX(0);opacity:0.6} 50%{transform:translateX(8px);opacity:1} }
+      `}</style>
     </div>
   );
 }
@@ -1148,6 +1295,25 @@ function App(){
     setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),(dur||5000)+300);
   };
   const nav=s=>{setScreen(s);window.scrollTo(0,0);};
+
+  // Inactivity timeout — return to home after 30 minutes
+  useEffect(()=>{
+    let timer;
+    const reset=()=>{
+      clearTimeout(timer);
+      timer=setTimeout(()=>{
+        setScreen('home');
+        window.scrollTo(0,0);
+      }, 30*60*1000);
+    };
+    const events=['click','touchstart','keydown','mousemove','scroll'];
+    events.forEach(e=>window.addEventListener(e,reset,{passive:true}));
+    reset();
+    return()=>{
+      clearTimeout(timer);
+      events.forEach(e=>window.removeEventListener(e,reset));
+    };
+  },[]);
   const resetPin=()=>{localStorage.removeItem('nhnn_pin');setPinOk(false);};
   const su=async nu=>{await saveUsers(nu);};
 
