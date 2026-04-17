@@ -1264,7 +1264,14 @@ function App(){
       if(user){
         unP=db.collection('nhnn').doc('parts').onSnapshot(
           async s=>{
-            const p=s.exists?(s.data().v||[]):[];
+            let p=s.exists?(s.data().v||[]):[];
+            // Backfill maxStock:0 for any parts missing it
+            let needsSave=false;
+            p=p.map(part=>{
+              if(part.maxStock===undefined){needsSave=true;return{...part,maxStock:0};}
+              return part;
+            });
+            if(needsSave)await db.collection('nhnn').doc('parts').set({v:p});
             setParts(p);
             const imgs={};
             await Promise.all(p.map(async part=>{
