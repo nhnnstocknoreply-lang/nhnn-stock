@@ -113,9 +113,9 @@ async function sendEmail(to,subject,body,attachments){
 }
 
 async function sendEmailWithXlsx(to,subject,body,parts){
-  const rows=parts.map(p=>({'Part Code':p.partCode||'','Part Number':p.partNumber||'','Bin Number':p.binNumber||'','Part Name':p.partName||'','Supplier':p.supplier||'','Current Stock':Number(p.currentStock)||0,'Minimum Stock':Number(p.minimumStock)||0}));
+  const rows=parts.map(p=>({'Part Code':p.partCode||'','Part Number':p.partNumber||'','Bin Number':p.binNumber||'','Part Name':p.partName||'','Supplier':p.supplier||'','Current Stock':Number(p.currentStock)||0,'Minimum Stock':Number(p.minimumStock)||0,'Maximum Stock':Number(p.maxStock)||0}));
   const ws=XLSX.utils.json_to_sheet(rows);
-  ws['!cols']=[{wch:14},{wch:18},{wch:12},{wch:30},{wch:18},{wch:14},{wch:14}];
+  ws['!cols']=[{wch:14},{wch:18},{wch:12},{wch:30},{wch:18},{wch:14},{wch:14},{wch:14}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'NHNN Stock');
   const b64=XLSX.write(wb,{bookType:'xlsx',type:'base64'});
@@ -255,6 +255,7 @@ function PartSearch({parts,images,label,onSelect}){
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{color:C.txt,fontSize:15,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.partName}</div>
                   <div style={{color:C.sub,fontSize:13,marginTop:3}}>{p.partCode} · Bin: {p.binNumber} · {p.supplier}</div>
+                  <div style={{color:C.sub,fontSize:12,marginTop:2}}>Min: {p.minimumStock}{p.maxStock>0?' · Max: '+p.maxStock:''}{p.maxStock>0&&p.currentStock>=p.maxStock?' ⚠ At max':''}</div>
                   <span style={{display:'inline-block',marginTop:4,fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:4,
                     background:p.currentStock===0?'#FEF2F2':p.currentStock<=p.minimumStock?'#FFFBEB':'#F0FDF4',
                     color:p.currentStock===0?C.red:p.currentStock<=p.minimumStock?'#B45309':'#16A34A'}}>
@@ -911,7 +912,7 @@ function RestockScreen({parts,images,navigate,toast}){
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontWeight:700,color:C.txt,fontSize:16,marginBottom:4,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{it.part.partName}</div>
                   <div style={{color:C.sub,fontSize:13,marginBottom:4}}>{it.part.partCode} · Bin: {it.part.binNumber}</div>
-                  <div style={{color:C.green,fontSize:13,fontWeight:600}}>Current: {it.part.currentStock} → After: {it.part.currentStock+it.qty}</div>
+                  <div style={{color:C.green,fontSize:13,fontWeight:600}}>Current: {it.part.currentStock} → After: {it.part.currentStock+it.qty}{it.part.maxStock>0&&it.part.currentStock+it.qty>=it.part.maxStock?' ⚠ At max':''}  {it.part.maxStock>0?'(max: '+it.part.maxStock+')':''}</div>
                   <div style={{display:'flex',alignItems:'center',gap:8,marginTop:10}}>
                     <button onClick={()=>setQty(it.id,it.qty-1)} style={{...btn,background:'#F1F5F9',color:C.txt,width:36,height:36,padding:0,fontSize:18}}>−</button>
                     <span style={{fontWeight:800,fontSize:20,minWidth:32,textAlign:'center'}}>{it.qty}</span>
@@ -950,7 +951,7 @@ function RestockScreen({parts,images,navigate,toast}){
 
 /* ── New Part ── */
 function NewPartScreen({parts,users,images,setImages,navigate,toast}){
-  const [form,setForm]=useState({partCode:'',partNumber:'',binNumber:'',partName:'',supplier:'',currentStock:'',minimumStock:''});
+  const [form,setForm]=useState({partCode:'',partNumber:'',binNumber:'',partName:'',supplier:'',currentStock:'',minimumStock:'',maxStock:'0'});
   const [img,setImg]=useState(null);
   const [busy,setBusy]=useState(false);
   const fref=useRef(null);
@@ -966,7 +967,7 @@ function NewPartScreen({parts,users,images,setImages,navigate,toast}){
     if(img)imageUrl=await uploadPhoto(form.partCode.trim(),img);
     const part={id:uid(),partCode:form.partCode.trim(),partNumber:form.partNumber.trim(),
       binNumber:form.binNumber.trim(),partName:form.partName.trim(),supplier:form.supplier.trim(),
-      currentStock:parseInt(form.currentStock)||0,minimumStock:parseInt(form.minimumStock)||0,
+      currentStock:parseInt(form.currentStock)||0,minimumStock:parseInt(form.minimumStock)||0,maxStock:parseInt(form.maxStock)||0,
       imageUrl,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
     await saveParts([...parts,part]);
     if(img&&imageUrl)setImages(prev=>({...prev,[part.partCode]:img}));
@@ -983,6 +984,7 @@ function NewPartScreen({parts,users,images,setImages,navigate,toast}){
     {k:'supplier',l:'Supplier',ph:'Supplier name'},
     {k:'currentStock',l:'Current Stock',req:true,ph:'0',t:'number'},
     {k:'minimumStock',l:'Minimum Stock',req:true,ph:'0',t:'number'},
+    {k:'maxStock',l:'Maximum Stock (0 = no limit)',ph:'0',t:'number'},
   ];
   return(
     <div style={{minHeight:'100vh',background:C.bg,padding:20}}>
@@ -1022,7 +1024,7 @@ function CorrectionScreen({parts,users,images,setImages,navigate,toast}){
   const [img,setImg]=useState(null);
   const [busy,setBusy]=useState(false);
   const fref=useRef(null);
-  const pick=p=>{setSel(p);setForm({partNumber:p.partNumber||'',partName:p.partName,binNumber:p.binNumber||'',supplier:p.supplier||'',minimumStock:p.minimumStock});setNewStock(String(p.currentStock));setImg(null);};
+  const pick=p=>{setSel(p);setForm({partNumber:p.partNumber||'',partName:p.partName,binNumber:p.binNumber||'',supplier:p.supplier||'',minimumStock:p.minimumStock,maxStock:p.maxStock||0});setNewStock(String(p.currentStock));setImg(null);};
   const set=(k,v)=>setForm(p=>({...p,[k]:v}));
   const handleImg=async e=>{const f=e.target.files[0];if(f)setImg(await compressImage(f));};
   const submit=async()=>{
@@ -1032,7 +1034,7 @@ function CorrectionScreen({parts,users,images,setImages,navigate,toast}){
     const corrected=parseInt(newStock)||0;
     let imageUrl=sel.imageUrl||null;
     if(img)imageUrl=await uploadPhoto(sel.partCode,img);
-    const np=parts.map(p=>p.id===sel.id?{...p,...form,minimumStock:parseInt(form.minimumStock)||0,currentStock:corrected,imageUrl,updatedAt:new Date().toISOString()}:p);
+    const np=parts.map(p=>p.id===sel.id?{...p,...form,minimumStock:parseInt(form.minimumStock)||0,maxStock:parseInt(form.maxStock)||0,currentStock:corrected,imageUrl,updatedAt:new Date().toISOString()}:p);
     await saveParts(np);
     if(img&&imageUrl)setImages(prev=>({...prev,[sel.partCode]:img}));
     const mgrs=(users||[]).filter(u=>u.isManager).map(u=>u.email).filter(Boolean);
@@ -1053,7 +1055,7 @@ function CorrectionScreen({parts,users,images,setImages,navigate,toast}){
         {sel&&(
           <div style={card}>
             <p style={{color:'#94A3B8',fontSize:11,fontWeight:700,letterSpacing:'.5px',textTransform:'uppercase',margin:'0 0 14px'}}>Correction Details</p>
-            {[{k:'partName',l:'Part Name'},{k:'partNumber',l:'Part Number'},{k:'binNumber',l:'Bin Number'},{k:'supplier',l:'Supplier'},{k:'minimumStock',l:'Minimum Stock',t:'number'}].map(f=>(
+            {[{k:'partName',l:'Part Name'},{k:'partNumber',l:'Part Number'},{k:'binNumber',l:'Bin Number'},{k:'supplier',l:'Supplier'},{k:'minimumStock',l:'Minimum Stock',t:'number'},{k:'maxStock',l:'Maximum Stock (0 = no limit)',t:'number'}].map(f=>(
               <div key={f.k} style={{marginBottom:12}}>
                 <label style={{display:'block',color:'#94A3B8',fontSize:11,fontWeight:700,letterSpacing:'.5px',textTransform:'uppercase',marginBottom:5}}>{f.l}</label>
                 <input type={f.t||'text'} value={form[f.k]||''} onChange={e=>set(f.k,e.target.value)} style={inp}/>
@@ -1115,6 +1117,7 @@ function ImportScreen({parts,navigate,toast}){
           supplier:String(r['Supplier']||r['SUPPLIER']||r['supplier']||'').trim(),
           currentStock:parseInt(r['Current Stock']||r['CURRENT STOCK']||r['currentStock'])||0,
           minimumStock:parseInt(r['Minimum Stock']||r['MINIMUM STOCK']||r['minimumStock'])||0,
+          maxStock:parseInt(r['Maximum Stock']||r['MAXIMUM STOCK']||r['maxStock'])||0,
         }));
         const valid=mapped.filter(r=>r.partCode&&r.partName);
         const skipped=mapped.length-valid.length;
@@ -1176,9 +1179,9 @@ function ExportScreen({parts,navigate,toast}){
   const fname='NHNN_Stock_'+new Date().toISOString().slice(0,10)+'.xlsx';
   const doDownload=()=>{
     if(!parts.length){toast('No parts to export','warning');return;}
-    const rows=parts.map(p=>({'Part Code':p.partCode||'','Part Number':p.partNumber||'','Bin Number':p.binNumber||'','Part Name':p.partName||'','Supplier':p.supplier||'','Current Stock':Number(p.currentStock)||0,'Minimum Stock':Number(p.minimumStock)||0}));
+    const rows=parts.map(p=>({'Part Code':p.partCode||'','Part Number':p.partNumber||'','Bin Number':p.binNumber||'','Part Name':p.partName||'','Supplier':p.supplier||'','Current Stock':Number(p.currentStock)||0,'Minimum Stock':Number(p.minimumStock)||0,'Maximum Stock':Number(p.maxStock)||0}));
     const ws=XLSX.utils.json_to_sheet(rows);
-    ws['!cols']=[{wch:14},{wch:18},{wch:12},{wch:30},{wch:18},{wch:14},{wch:14}];
+    ws['!cols']=[{wch:14},{wch:18},{wch:12},{wch:30},{wch:18},{wch:14},{wch:14},{wch:14}];
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,'NHNN Stock');
     XLSX.writeFile(wb,fname);
@@ -1343,7 +1346,6 @@ function App(){
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
-
 </script>
 </body>
 </html>
