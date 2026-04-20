@@ -550,6 +550,11 @@ function SettingsScreen({users,saveUsers:su,navigate,toast,resetPin}){
               </div>
             ))}
           </div>
+          <button onClick={()=>setShowSnake(true)}
+            style={{...btn,background:'#1a1a2e',color:'#00ff88',border:'1px solid #00ff88',padding:'14px 20px',width:'100%',marginTop:20,fontSize:15,borderRadius:14,fontFamily:'inherit'}}>
+            🎮 Bored? Play Snake
+          </button>
+          {showSnake&&<SnakeGame onClose={()=>setShowSnake(false)}/>}
         </>}
         {view==='danger'&&<>
           <h2 style={{fontWeight:800,fontSize:30,color:C.txt,margin:'0 0 20px',letterSpacing:'-0.8px',color:C.red}}>Danger Zone</h2>
@@ -564,11 +569,6 @@ function SettingsScreen({users,saveUsers:su,navigate,toast,resetPin}){
               setView('menu');
             }} style={{...btn,background:C.red,color:'#fff',padding:'12px 20px',width:'100%',fontSize:15}}>🗑 Delete All Parts</button>
           </div>
-          <button onClick={()=>setShowSnake(true)}
-            style={{...btn,background:'#1a1a2e',color:'#00ff88',border:'1px solid #00ff88',padding:'14px 20px',width:'100%',marginTop:20,fontSize:15,borderRadius:14,fontFamily:'inherit'}}>
-            🎮 Bored? Play Snake
-          </button>
-          {showSnake&&<SnakeGame onClose={()=>setShowSnake(false)}/>}
         </>}
         {view==='info'&&<>
           <h2 style={{fontWeight:800,fontSize:30,color:C.txt,margin:'0 0 20px',letterSpacing:'-0.8px'}}>About</h2>
