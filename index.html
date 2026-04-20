@@ -1319,9 +1319,11 @@ function SnakeGame({onClose}){
     try{
       const doc=await db.collection('nhnn').doc('snake_leaderboard').get();
       const current=doc.exists?(doc.data().v||[]):[];
-      const existing=current.findIndex(e=>e.name===playerName);
       const now=new Date();
-      const entry={name:playerName,score:finalScore,date:now.toLocaleDateString('en-GB'),month:now.getMonth(),year:now.getFullYear()};
+      const m=now.getMonth(), y=now.getFullYear();
+      // One entry per player per month — keeps each month's best separately
+      const existing=current.findIndex(e=>e.name===playerName&&e.month===m&&e.year===y);
+      const entry={name:playerName,score:finalScore,date:now.toLocaleDateString('en-GB'),month:m,year:y};
       let updated;
       if(existing!==-1){
         updated=[...current];
@@ -1329,7 +1331,6 @@ function SnakeGame({onClose}){
       }else{
         updated=[...current,entry];
       }
-      updated.sort((a,b)=>b.score-a.score);
       await db.collection('nhnn').doc('snake_leaderboard').set({v:updated});
     }catch(e){console.error('saveScore',e);}
   };
@@ -1376,8 +1377,16 @@ function SnakeGame({onClose}){
 
   // Filter leaderboards
   const now=new Date();
-  const monthly=leaderboard.filter(e=>e.month===now.getMonth()&&e.year===now.getFullYear()).slice(0,8);
-  const overall=leaderboard.slice(0,8);
+  const monthly=leaderboard
+    .filter(e=>e.month===now.getMonth()&&e.year===now.getFullYear())
+    .sort((a,b)=>b.score-a.score)
+    .slice(0,8);
+  // Overall: best score per player across all time
+  const bestByPlayer={};
+  leaderboard.forEach(e=>{
+    if(!bestByPlayer[e.name]||e.score>bestByPlayer[e.name].score) bestByPlayer[e.name]=e;
+  });
+  const overall=Object.values(bestByPlayer).sort((a,b)=>b.score-a.score).slice(0,8);
   const monthName=now.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
 
   const DirButton=({dir,ch,style})=>(
