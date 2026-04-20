@@ -261,8 +261,8 @@ function PartSearch({parts,images,label,onSelect}){
                   :<div style={{width:72,height:72,background:'#F1F5F9',borderRadius:12,flexShrink:0,flexGrow:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:28}}>📦</div>}
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{color:C.txt,fontSize:15,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.partName}</div>
-                  <div style={{color:C.sub,fontSize:13,marginTop:3}}>{p.partCode} · Bin: {p.binNumber} · {p.supplier}</div>
-                  <div style={{color:C.sub,fontSize:12,marginTop:2}}>Min: {p.minimumStock} · Max: {p.maxStock>0?p.maxStock:'—'}{p.maxStock>0&&p.currentStock>=p.maxStock?' ⚠ At max':''}</div>
+                  <div style={{color:C.sub,fontSize:13,marginTop:3}}>{p.partNumber||p.partCode} · Bin: {p.binNumber} · {p.supplier}</div>
+                  <div style={{color:C.sub,fontSize:12,marginTop:2}}>Code: {p.partCode} · Min: {p.minimumStock} · Max: {p.maxStock>0?p.maxStock:'—'}{p.maxStock>0&&p.currentStock>=p.maxStock?' ⚠ At max':''}</div>
                   <span style={{display:'inline-block',marginTop:4,fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:4,
                     background:p.currentStock===0?'#FEF2F2':p.currentStock<=p.minimumStock?'#FFFBEB':'#F0FDF4',
                     color:p.currentStock===0?C.red:p.currentStock<=p.minimumStock?'#B45309':'#16A34A'}}>
