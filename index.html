@@ -1232,18 +1232,17 @@ function SnakeGame({onClose}){
   const [score,setScore]=useState(0);
   const [leaderboard,setLeaderboard]=useState([]);
   const [snake,setSnake]=useState([{x:10,y:10}]);
-  const [food,setFood]=useState({x:5,y:5});
+  const [foods,setFoods]=useState([{x:5,y:5,type:'💊'},{x:15,y:15,type:'🩺'}]);
+  const [lbView,setLbView]=useState('monthly');
   const dirRef=useRef({x:1,y:0});
   const snakeRef=useRef([{x:10,y:10}]);
-  const foodRef=useRef({x:5,y:5});
+  const foodsRef=useRef([{x:5,y:5,type:'💊'},{x:15,y:15,type:'🩺'}]);
   const scoreRef=useRef(0);
   const loopRef=useRef(null);
   const touchRef=useRef(null);
   const COLS=25, ROWS=22, CELL=22;
 
-  // Hospital themed food items
   const FOODS=['💊','🩺','💉','🩹','🧬','❤️','🫀','🧪'];
-  const foodTypeRef=useRef(FOODS[0]);
 
   useEffect(()=>{
     const unsub=db.collection('nhnn').doc('snake_leaderboard').onSnapshot(s=>{
@@ -1252,23 +1251,28 @@ function SnakeGame({onClose}){
     return()=>unsub();
   },[]);
 
-  const randFood=(s)=>{
+  const makeFood=(s,existing)=>{
     let f;
-    do{ f={x:Math.floor(Math.random()*COLS),y:Math.floor(Math.random()*ROWS)}; }
-    while(s.some(p=>p.x===f.x&&p.y===f.y));
-    foodTypeRef.current=FOODS[Math.floor(Math.random()*FOODS.length)];
+    do{ f={x:Math.floor(Math.random()*COLS),y:Math.floor(Math.random()*ROWS),type:FOODS[Math.floor(Math.random()*FOODS.length)]}; }
+    while(s.some(p=>p.x===f.x&&p.y===f.y)||(existing||[]).some(p=>p.x===f.x&&p.y===f.y));
     return f;
+  };
+
+  const initFoods=(s)=>{
+    const f1=makeFood(s,[]);
+    const f2=makeFood(s,[f1]);
+    return [f1,f2];
   };
 
   const startGame=()=>{
     const init=[{x:12,y:11},{x:11,y:11},{x:10,y:11}];
-    const initFood=randFood(init);
+    const fs=initFoods(init);
     snakeRef.current=init;
-    foodRef.current=initFood;
+    foodsRef.current=fs;
     dirRef.current={x:1,y:0};
     scoreRef.current=0;
     setSnake(init);
-    setFood(initFood);
+    setFoods(fs);
     setScore(0);
     setPhase('playing');
   };
@@ -1279,12 +1283,7 @@ function SnakeGame({onClose}){
     loopRef.current=setInterval(()=>{
       const s=[...snakeRef.current];
       const d=dirRef.current;
-      // Wrap around walls instead of dying
-      const head={
-        x:(s[0].x+d.x+COLS)%COLS,
-        y:(s[0].y+d.y+ROWS)%ROWS
-      };
-      // Only self-collision kills
+      const head={x:(s[0].x+d.x+COLS)%COLS, y:(s[0].y+d.y+ROWS)%ROWS};
       if(s.some(p=>p.x===head.x&&p.y===head.y)){
         clearInterval(loopRef.current);
         setPhase('dead');
@@ -1292,12 +1291,20 @@ function SnakeGame({onClose}){
         return;
       }
       const newSnake=[head,...s];
-      if(head.x===foodRef.current.x&&head.y===foodRef.current.y){
-        scoreRef.current+=10;
-        setScore(scoreRef.current);
-        const newFood=randFood(newSnake);
-        foodRef.current=newFood;
-        setFood({...newFood});
+      let ate=false;
+      let newFoods=[...foodsRef.current];
+      for(let i=0;i<newFoods.length;i++){
+        if(head.x===newFoods[i].x&&head.y===newFoods[i].y){
+          scoreRef.current+=10;
+          setScore(scoreRef.current);
+          newFoods[i]=makeFood(newSnake,newFoods.filter((_,j)=>j!==i));
+          ate=true;
+          break;
+        }
+      }
+      if(ate){
+        foodsRef.current=newFoods;
+        setFoods([...newFoods]);
       }else{
         newSnake.pop();
       }
@@ -1308,21 +1315,29 @@ function SnakeGame({onClose}){
   },[phase,score]);
 
   const saveScore=async(finalScore)=>{
+    if(finalScore===0)return;
     try{
       const doc=await db.collection('nhnn').doc('snake_leaderboard').get();
       const current=doc.exists?(doc.data().v||[]):[];
       const existing=current.findIndex(e=>e.name===playerName);
+      const now=new Date();
+      const entry={name:playerName,score:finalScore,date:now.toLocaleDateString('en-GB'),month:now.getMonth(),year:now.getFullYear()};
       let updated;
       if(existing!==-1){
         updated=[...current];
-        if(finalScore>current[existing].score)
-          updated[existing]={name:playerName,score:finalScore,date:new Date().toLocaleDateString('en-GB')};
+        if(finalScore>current[existing].score) updated[existing]=entry;
       }else{
-        updated=[...current,{name:playerName,score:finalScore,date:new Date().toLocaleDateString('en-GB')}];
+        updated=[...current,entry];
       }
       updated.sort((a,b)=>b.score-a.score);
       await db.collection('nhnn').doc('snake_leaderboard').set({v:updated});
     }catch(e){console.error('saveScore',e);}
+  };
+
+  const quitEarly=()=>{
+    clearInterval(loopRef.current);
+    setPhase('dead');
+    saveScore(scoreRef.current);
   };
 
   useEffect(()=>{
@@ -1333,43 +1348,62 @@ function SnakeGame({onClose}){
       if(newDir){
         e.preventDefault();
         const cur=dirRef.current;
-        if(newDir.x!==-cur.x||newDir.y!==-cur.y){
-          dirRef.current=newDir;
-        }
+        if(newDir.x!==-cur.x||newDir.y!==-cur.y) dirRef.current=newDir;
       }
     };
     window.addEventListener('keydown',handle);
     return()=>window.removeEventListener('keydown',handle);
   },[phase]);
 
+  const changeDir=(nx,ny)=>{
+    const cur=dirRef.current;
+    if(nx!==-cur.x||ny!==-cur.y) dirRef.current={x:nx,y:ny};
+  };
+
   const handleTouchStart=e=>{ touchRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY}; };
   const handleTouchEnd=e=>{
     if(!touchRef.current||phase!=='playing')return;
     const dx=e.changedTouches[0].clientX-touchRef.current.x;
     const dy=e.changedTouches[0].clientY-touchRef.current.y;
-    const cur=dirRef.current;
-    if(Math.abs(dx)>Math.abs(dy)){
-      const nd=dx>0?{x:1,y:0}:{x:-1,y:0};
-      if(nd.x!==-cur.x)dirRef.current=nd;
-    }else{
-      const nd=dy>0?{x:0,y:1}:{x:0,y:-1};
-      if(nd.y!==-cur.y)dirRef.current=nd;
-    }
+    if(Math.abs(dx)<10&&Math.abs(dy)<10){touchRef.current=null;return;}
+    if(Math.abs(dx)>Math.abs(dy)) changeDir(dx>0?1:-1,0);
+    else changeDir(0,dy>0?1:-1);
     touchRef.current=null;
   };
 
   const boardW=COLS*CELL;
   const boardH=ROWS*CELL;
 
+  // Filter leaderboards
+  const now=new Date();
+  const monthly=leaderboard.filter(e=>e.month===now.getMonth()&&e.year===now.getFullYear()).slice(0,8);
+  const overall=leaderboard.slice(0,8);
+  const monthName=now.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+
+  const DirButton=({dir,ch,style})=>(
+    <button onTouchStart={e=>{e.preventDefault();changeDir(dir.x,dir.y);}}
+      onClick={()=>changeDir(dir.x,dir.y)}
+      style={{width:52,height:52,borderRadius:12,background:'#1e3a5f',border:'1px solid #334155',color:'#38bdf8',fontSize:22,fontWeight:700,cursor:'pointer',fontFamily:'inherit',touchAction:'manipulation',userSelect:'none',...style}}>
+      {ch}
+    </button>
+  );
+
+  const LeaderRow=({e,i,isPlayer})=>(
+    <div style={{display:'flex',alignItems:'center',gap:8,padding:'6px 4px',borderBottom:'1px solid #1e3a5f',background:isPlayer?'rgba(56,189,248,0.08)':'transparent',borderRadius:4}}>
+      <span style={{fontSize:14,width:20}}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':'💊'}</span>
+      <span style={{color:isPlayer?'#38bdf8':'#e2e8f0',fontSize:13,flex:1,fontWeight:isPlayer?700:400,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{e.name}</span>
+      <span style={{color:'#38bdf8',fontWeight:700,fontSize:14}}>{e.score}</span>
+    </div>
+  );
+
   return(
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.9)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',padding:16,overflowY:'auto'}}>
-      <div style={{background:'#0a1628',borderRadius:24,padding:24,width:'100%',maxWidth:620,boxShadow:'0 20px 60px rgba(0,0,0,0.7)',border:'1px solid #1e3a5f'}}>
+      <div style={{background:'#0a1628',borderRadius:24,padding:24,width:'100%',maxWidth:700,boxShadow:'0 20px 60px rgba(0,0,0,0.7)',border:'1px solid #1e3a5f'}}>
 
-        {/* Header */}
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
           <div>
             <div style={{color:'#38bdf8',fontWeight:800,fontSize:20,letterSpacing:1}}>🏥 MEDIC SNAKE</div>
-            <div style={{color:'#475569',fontSize:11,marginTop:2}}>Collect medicine · Don't eat yourself · Walls wrap around</div>
+            <div style={{color:'#475569',fontSize:11,marginTop:2}}>Collect medicine · Walls wrap · Don't eat yourself</div>
           </div>
           <button onClick={onClose} style={{background:'none',border:'none',color:'#475569',fontSize:24,cursor:'pointer',lineHeight:1}}>✕</button>
         </div>
@@ -1387,19 +1421,16 @@ function SnakeGame({onClose}){
                 Start Game →
               </button>
             </div>
-            {leaderboard.length>0&&(
-              <div style={{background:'#0f2240',borderRadius:14,padding:16,border:'1px solid #1e3a5f'}}>
-                <p style={{color:'#475569',fontSize:11,letterSpacing:1,textTransform:'uppercase',marginBottom:12}}>🏆 Hall of Fame</p>
-                {leaderboard.slice(0,8).map((e,i)=>(
-                  <div key={i} style={{display:'flex',alignItems:'center',gap:10,padding:'7px 0',borderBottom:i<leaderboard.length-1?'1px solid #1e3a5f':'none'}}>
-                    <span style={{fontSize:16}}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':'💊'}</span>
-                    <span style={{color:'#e2e8f0',fontSize:14,flex:1}}>{e.name}</span>
-                    <span style={{color:'#38bdf8',fontWeight:700,fontSize:15}}>{e.score}</span>
-                    <span style={{color:'#334155',fontSize:11}}>{e.date}</span>
-                  </div>
-                ))}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div style={{background:'#0f2240',borderRadius:14,padding:14,border:'1px solid #1e3a5f'}}>
+                <p style={{color:'#38bdf8',fontSize:11,letterSpacing:1,textTransform:'uppercase',marginBottom:8,fontWeight:700}}>📅 {monthName}</p>
+                {monthly.length===0?<p style={{color:'#475569',fontSize:12,textAlign:'center',padding:10}}>No scores yet</p>:monthly.map((e,i)=><LeaderRow key={i} e={e} i={i} isPlayer={false}/>)}
               </div>
-            )}
+              <div style={{background:'#0f2240',borderRadius:14,padding:14,border:'1px solid #1e3a5f'}}>
+                <p style={{color:'#FFD700',fontSize:11,letterSpacing:1,textTransform:'uppercase',marginBottom:8,fontWeight:700}}>🏆 All Time</p>
+                {overall.length===0?<p style={{color:'#475569',fontSize:12,textAlign:'center',padding:10}}>No scores yet</p>:overall.map((e,i)=><LeaderRow key={i} e={e} i={i} isPlayer={false}/>)}
+              </div>
+            </div>
           </div>
         )}
 
@@ -1408,33 +1439,38 @@ function SnakeGame({onClose}){
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
               <span style={{color:'#94a3b8',fontSize:13}}>👤 {playerName}</span>
               <span style={{color:'#38bdf8',fontWeight:800,fontSize:18}}>Score: {score}</span>
-              <span style={{color:'#475569',fontSize:12}}>Level {Math.floor(score/50)+1}</span>
+              <button onClick={quitEarly} style={{background:'#ef4444',border:'none',color:'#fff',padding:'6px 14px',borderRadius:8,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>Done?</button>
             </div>
             <div style={{position:'relative',width:boardW,height:boardH,background:'#060f1e',border:'2px solid #1e3a5f',borderRadius:12,overflow:'hidden',touchAction:'none',maxWidth:'100%',margin:'0 auto'}}
               onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-              {/* Grid dots */}
               {Array.from({length:COLS*ROWS}).map((_,i)=>(
                 <div key={i} style={{position:'absolute',left:(i%COLS)*CELL+CELL/2-1,top:Math.floor(i/COLS)*CELL+CELL/2-1,width:2,height:2,borderRadius:'50%',background:'#38bdf8',opacity:0.08}}/>
               ))}
-              {/* Food */}
-              <div style={{position:'absolute',left:food.x*CELL,top:food.y*CELL,width:CELL,height:CELL,display:'flex',alignItems:'center',justifyContent:'center',fontSize:CELL-4,lineHeight:1}}>
-                {foodTypeRef.current}
-              </div>
-              {/* Snake */}
+              {foods.map((f,i)=>(
+                <div key={i} style={{position:'absolute',left:f.x*CELL,top:f.y*CELL,width:CELL,height:CELL,display:'flex',alignItems:'center',justifyContent:'center',fontSize:CELL-4,lineHeight:1}}>{f.type}</div>
+              ))}
               {snake.map((p,i)=>(
-                <div key={i} style={{
-                  position:'absolute',left:p.x*CELL+1,top:p.y*CELL+1,
-                  width:CELL-2,height:CELL-2,
+                <div key={i} style={{position:'absolute',left:p.x*CELL+1,top:p.y*CELL+1,width:CELL-2,height:CELL-2,
                   background:i===0?'#38bdf8':i<3?'#0ea5e9':'#0369a1',
                   borderRadius:i===0?8:4,
                   boxShadow:i===0?'0 0 10px #38bdf8':undefined,
                   display:i===0?'flex':'block',
-                  alignItems:'center',justifyContent:'center',
-                  fontSize:10,
-                }}>{i===0?'+':''}</div>
+                  alignItems:'center',justifyContent:'center',fontSize:10,color:'#fff',fontWeight:700}}>
+                  {i===0?'+':''}
+                </div>
               ))}
             </div>
-            <p style={{color:'#334155',fontSize:11,textAlign:'center',marginTop:8}}>Arrow keys or swipe · Walls wrap around · Don't eat yourself!</p>
+            {/* Arrow pad */}
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:6,marginTop:14}}>
+              <DirButton dir={{x:0,y:-1}} ch="↑"/>
+              <div style={{display:'flex',gap:6}}>
+                <DirButton dir={{x:-1,y:0}} ch="←"/>
+                <div style={{width:52,height:52}}/>
+                <DirButton dir={{x:1,y:0}} ch="→"/>
+              </div>
+              <DirButton dir={{x:0,y:1}} ch="↓"/>
+            </div>
+            <p style={{color:'#334155',fontSize:11,textAlign:'center',marginTop:8}}>Arrow keys · Swipe · Or tap the pad</p>
           </div>
         )}
 
@@ -1442,29 +1478,23 @@ function SnakeGame({onClose}){
           <div>
             <div style={{textAlign:'center',padding:'16px 0',marginBottom:16}}>
               <div style={{fontSize:48,marginBottom:8}}>🚑</div>
-              <p style={{color:'#ef4444',fontWeight:800,fontSize:22,marginBottom:4}}>You ate yourself!</p>
+              <p style={{color:'#ef4444',fontWeight:800,fontSize:22,marginBottom:4}}>Game Over!</p>
               <p style={{color:'#38bdf8',fontSize:36,fontWeight:800,marginBottom:2}}>{score}</p>
               <p style={{color:'#475569',fontSize:13}}>points · {playerName}</p>
             </div>
-            <div style={{background:'#0f2240',borderRadius:14,padding:16,border:'1px solid #1e3a5f',marginBottom:16}}>
-              <p style={{color:'#475569',fontSize:11,letterSpacing:1,textTransform:'uppercase',marginBottom:12}}>🏆 Hall of Fame</p>
-              {leaderboard.slice(0,8).map((e,i)=>(
-                <div key={i} style={{display:'flex',alignItems:'center',gap:10,padding:'7px 0',borderBottom:i<Math.min(leaderboard.length,8)-1?'1px solid #1e3a5f':'none',background:e.name===playerName?'rgba(56,189,248,0.05)':'transparent',borderRadius:4,paddingLeft:4}}>
-                  <span style={{fontSize:16}}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':'💊'}</span>
-                  <span style={{color:e.name===playerName?'#38bdf8':'#e2e8f0',fontSize:14,flex:1,fontWeight:e.name===playerName?700:400}}>{e.name}</span>
-                  <span style={{color:'#38bdf8',fontWeight:700,fontSize:15}}>{e.score}</span>
-                </div>
-              ))}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}}>
+              <div style={{background:'#0f2240',borderRadius:14,padding:14,border:'1px solid #1e3a5f'}}>
+                <p style={{color:'#38bdf8',fontSize:11,letterSpacing:1,textTransform:'uppercase',marginBottom:8,fontWeight:700}}>📅 {monthName}</p>
+                {monthly.length===0?<p style={{color:'#475569',fontSize:12,textAlign:'center',padding:10}}>No scores yet</p>:monthly.map((e,i)=><LeaderRow key={i} e={e} i={i} isPlayer={e.name===playerName}/>)}
+              </div>
+              <div style={{background:'#0f2240',borderRadius:14,padding:14,border:'1px solid #1e3a5f'}}>
+                <p style={{color:'#FFD700',fontSize:11,letterSpacing:1,textTransform:'uppercase',marginBottom:8,fontWeight:700}}>🏆 All Time</p>
+                {overall.length===0?<p style={{color:'#475569',fontSize:12,textAlign:'center',padding:10}}>No scores yet</p>:overall.map((e,i)=><LeaderRow key={i} e={e} i={i} isPlayer={e.name===playerName}/>)}
+              </div>
             </div>
             <div style={{display:'flex',gap:10}}>
-              <button onClick={startGame}
-                style={{flex:1,padding:'13px',borderRadius:10,border:'none',background:'linear-gradient(135deg,#0ea5e9,#2563eb)',color:'#fff',fontWeight:700,fontSize:15,cursor:'pointer',fontFamily:'inherit'}}>
-                Play Again
-              </button>
-              <button onClick={onClose}
-                style={{flex:1,padding:'13px',borderRadius:10,border:'1px solid #1e3a5f',background:'transparent',color:'#94a3b8',fontWeight:700,fontSize:15,cursor:'pointer',fontFamily:'inherit'}}>
-                Exit
-              </button>
+              <button onClick={startGame} style={{flex:1,padding:'13px',borderRadius:10,border:'none',background:'linear-gradient(135deg,#0ea5e9,#2563eb)',color:'#fff',fontWeight:700,fontSize:15,cursor:'pointer',fontFamily:'inherit'}}>Play Again</button>
+              <button onClick={onClose} style={{flex:1,padding:'13px',borderRadius:10,border:'1px solid #1e3a5f',background:'transparent',color:'#94a3b8',fontWeight:700,fontSize:15,cursor:'pointer',fontFamily:'inherit'}}>Exit</button>
             </div>
           </div>
         )}
