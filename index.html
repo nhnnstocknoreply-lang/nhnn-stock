@@ -449,6 +449,7 @@ function SettingsScreen({users,saveUsers:su,navigate,toast,resetPin}){
   const [pwInput,setPwInput]=useState('');
   const [pwErr,setPwErr]=useState('');
   const [pwUnlocked,setPwUnlocked]=useState(()=>sessionStorage.getItem('mgr_unlocked')==='1');
+  const [showSnake,setShowSnake]=useState(false);
   const MANAGER_PW='2022';
   const checkPw=()=>{
     if(pwInput===MANAGER_PW){sessionStorage.setItem('mgr_unlocked','1');setPwUnlocked(true);setPwErr('');setView('users');}
@@ -563,6 +564,11 @@ function SettingsScreen({users,saveUsers:su,navigate,toast,resetPin}){
               setView('menu');
             }} style={{...btn,background:C.red,color:'#fff',padding:'12px 20px',width:'100%',fontSize:15}}>🗑 Delete All Parts</button>
           </div>
+          <button onClick={()=>setShowSnake(true)}
+            style={{...btn,background:'#1a1a2e',color:'#00ff88',border:'1px solid #00ff88',padding:'14px 20px',width:'100%',marginTop:20,fontSize:15,borderRadius:14,fontFamily:'inherit'}}>
+            🎮 Bored? Play Snake
+          </button>
+          {showSnake&&<SnakeGame onClose={()=>setShowSnake(false)}/>}
         </>}
         {view==='info'&&<>
           <h2 style={{fontWeight:800,fontSize:30,color:C.txt,margin:'0 0 20px',letterSpacing:'-0.8px'}}>About</h2>
@@ -1214,6 +1220,225 @@ function ExportScreen({parts,navigate,toast}){
           <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="recipient@example.com" type="email" style={{...inp,marginBottom:12}}/>
           <button onClick={doEmail} disabled={sending} style={{...btn,background:C.green,color:'#fff',padding:'13px 20px',width:'100%',fontSize:15,opacity:sending?.7:1}}>{sending?'Sending...':'📧 Email Excel File'}</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+
+/* ── Snake Game ── */
+function SnakeGame({onClose}){
+  const [phase,setPhase]=useState('name'); // name, playing, dead
+  const [playerName,setPlayerName]=useState('');
+  const [score,setScore]=useState(0);
+  const [leaderboard,setLeaderboard]=useState([]);
+  const [snake,setSnake]=useState([{x:10,y:10}]);
+  const [food,setFood]=useState({x:5,y:5});
+  const [dir,setDir]=useState({x:1,y:0});
+  const [gameOver,setGameOver]=useState(false);
+  const dirRef=useRef({x:1,y:0});
+  const snakeRef=useRef([{x:10,y:10}]);
+  const foodRef=useRef({x:5,y:5});
+  const scoreRef=useRef(0);
+  const loopRef=useRef(null);
+  const touchRef=useRef(null);
+  const COLS=20, ROWS=20, CELL=18;
+
+  // Load leaderboard
+  useEffect(()=>{
+    const unsub=db.collection('nhnn').doc('snake_leaderboard').onSnapshot(s=>{
+      if(s.exists)setLeaderboard(s.data().v||[]);
+    });
+    return()=>unsub();
+  },[]);
+
+  const randFood=(s)=>{
+    let f;
+    do{ f={x:Math.floor(Math.random()*COLS),y:Math.floor(Math.random()*ROWS)}; }
+    while(s.some(p=>p.x===f.x&&p.y===f.y));
+    return f;
+  };
+
+  const startGame=()=>{
+    const init=[{x:10,y:10}];
+    const initFood=randFood(init);
+    snakeRef.current=init;
+    foodRef.current=initFood;
+    dirRef.current={x:1,y:0};
+    scoreRef.current=0;
+    setSnake(init);
+    setFood(initFood);
+    setDir({x:1,y:0});
+    setScore(0);
+    setGameOver(false);
+    setPhase('playing');
+  };
+
+  // Game loop
+  useEffect(()=>{
+    if(phase!=='playing')return;
+    const speed=Math.max(80, 200-scoreRef.current*5);
+    loopRef.current=setInterval(()=>{
+      const s=[...snakeRef.current];
+      const d=dirRef.current;
+      const head={x:s[0].x+d.x, y:s[0].y+d.y};
+      // Wall collision
+      if(head.x<0||head.x>=COLS||head.y<0||head.y>=ROWS||s.some(p=>p.x===head.x&&p.y===head.y)){
+        clearInterval(loopRef.current);
+        setGameOver(true);
+        setPhase('dead');
+        saveScore(scoreRef.current);
+        return;
+      }
+      const newSnake=[head,...s];
+      if(head.x===foodRef.current.x&&head.y===foodRef.current.y){
+        scoreRef.current+=10;
+        setScore(scoreRef.current);
+        const newFood=randFood(newSnake);
+        foodRef.current=newFood;
+        setFood(newFood);
+      }else{
+        newSnake.pop();
+      }
+      snakeRef.current=newSnake;
+      setSnake([...newSnake]);
+    }, speed);
+    return()=>clearInterval(loopRef.current);
+  },[phase,score]);
+
+  const saveScore=async(finalScore)=>{
+    try{
+      const doc=await db.collection('nhnn').doc('snake_leaderboard').get();
+      const current=doc.exists?(doc.data().v||[]):[];
+      const existing=current.findIndex(e=>e.name===playerName);
+      let updated;
+      if(existing!==-1){
+        if(finalScore>current[existing].score){
+          updated=[...current];
+          updated[existing]={name:playerName,score:finalScore,date:new Date().toLocaleDateString('en-GB')};
+        } else { updated=current; }
+      } else {
+        updated=[...current,{name:playerName,score:finalScore,date:new Date().toLocaleDateString('en-GB')}];
+      }
+      updated.sort((a,b)=>b.score-a.score);
+      await db.collection('nhnn').doc('snake_leaderboard').set({v:updated});
+    }catch(e){console.error('saveScore',e);}
+  };
+
+  // Keyboard controls
+  useEffect(()=>{
+    if(phase!=='playing')return;
+    const handle=e=>{
+      const map={ArrowUp:{x:0,y:-1},ArrowDown:{x:0,y:1},ArrowLeft:{x:-1,y:0},ArrowRight:{x:1,y:0}};
+      const newDir=map[e.key];
+      if(newDir){
+        e.preventDefault();
+        const cur=dirRef.current;
+        if(newDir.x===0&&cur.x!==0)return;
+        if(newDir.y===0&&cur.y!==0)return;
+        dirRef.current=newDir;
+        setDir(newDir);
+      }
+    };
+    window.addEventListener('keydown',handle);
+    return()=>window.removeEventListener('keydown',handle);
+  },[phase]);
+
+  // Touch/swipe controls
+  const handleTouchStart=e=>{ touchRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY}; };
+  const handleTouchEnd=e=>{
+    if(!touchRef.current||phase!=='playing')return;
+    const dx=e.changedTouches[0].clientX-touchRef.current.x;
+    const dy=e.changedTouches[0].clientY-touchRef.current.y;
+    const cur=dirRef.current;
+    if(Math.abs(dx)>Math.abs(dy)){
+      const newDir=dx>0?{x:1,y:0}:{x:-1,y:0};
+      if(cur.y!==0){dirRef.current=newDir;setDir(newDir);}
+    } else {
+      const newDir=dy>0?{x:0,y:1}:{x:0,y:-1};
+      if(cur.x!==0){dirRef.current=newDir;setDir(newDir);}
+    }
+    touchRef.current=null;
+  };
+
+  return(
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',padding:20}}>
+      <div style={{background:'#1a1a2e',borderRadius:24,padding:24,maxWidth:420,width:'100%',boxShadow:'0 20px 60px rgba(0,0,0,0.5)',border:'1px solid #16213e'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+          <span style={{color:'#00ff88',fontWeight:800,fontSize:18,letterSpacing:1}}>🐍 SNAKE</span>
+          <button onClick={onClose} style={{background:'none',border:'none',color:'#666',fontSize:22,cursor:'pointer'}}>✕</button>
+        </div>
+
+        {phase==='name'&&(
+          <div>
+            <p style={{color:'#aaa',fontSize:14,marginBottom:16}}>Enter your name to start</p>
+            <input value={playerName} onChange={e=>setPlayerName(e.target.value)}
+              onKeyDown={e=>e.key==='Enter'&&playerName.trim()&&startGame()}
+              placeholder="Your name..." autoFocus
+              style={{width:'100%',padding:'12px 16px',borderRadius:10,border:'1px solid #333',background:'#0f0f23',color:'#fff',fontSize:15,boxSizing:'border-box',marginBottom:12,fontFamily:'inherit'}}/>
+            <button onClick={()=>playerName.trim()&&startGame()}
+              style={{width:'100%',padding:'12px',borderRadius:10,border:'none',background:'#00ff88',color:'#000',fontWeight:700,fontSize:15,cursor:'pointer',fontFamily:'inherit'}}>
+              Play →
+            </button>
+            {leaderboard.length>0&&(
+              <div style={{marginTop:20}}>
+                <p style={{color:'#666',fontSize:12,letterSpacing:1,textTransform:'uppercase',marginBottom:10}}>Leaderboard</p>
+                {leaderboard.slice(0,5).map((e,i)=>(
+                  <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'1px solid #222',alignItems:'center'}}>
+                    <span style={{color:i===0?'#FFD700':i===1?'#C0C0C0':i===2?'#CD7F32':'#666',fontSize:13,fontWeight:700}}>{i+1}.</span>
+                    <span style={{color:'#fff',fontSize:13,flex:1,marginLeft:10}}>{e.name}</span>
+                    <span style={{color:'#00ff88',fontWeight:700,fontSize:14}}>{e.score}</span>
+                    <span style={{color:'#444',fontSize:11,marginLeft:10}}>{e.date}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {phase==='playing'&&(
+          <div>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:10}}>
+              <span style={{color:'#aaa',fontSize:13}}>{playerName}</span>
+              <span style={{color:'#00ff88',fontWeight:700,fontSize:16}}>Score: {score}</span>
+            </div>
+            <div style={{position:'relative',width:COLS*CELL,height:ROWS*CELL,background:'#0f0f23',border:'2px solid #16213e',borderRadius:8,overflow:'hidden',cursor:'none',touchAction:'none'}}
+              onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+              {/* Food */}
+              <div style={{position:'absolute',left:food.x*CELL,top:food.y*CELL,width:CELL,height:CELL,display:'flex',alignItems:'center',justifyContent:'center',fontSize:CELL-2}}>🍎</div>
+              {/* Snake */}
+              {snake.map((p,i)=>(
+                <div key={i} style={{position:'absolute',left:p.x*CELL+1,top:p.y*CELL+1,width:CELL-2,height:CELL-2,
+                  background:i===0?'#00ff88':'#00cc66',borderRadius:i===0?6:3,
+                  boxShadow:i===0?'0 0 8px #00ff88':undefined}}/>
+              ))}
+            </div>
+            <p style={{color:'#444',fontSize:11,textAlign:'center',marginTop:8}}>Arrow keys or swipe to move</p>
+          </div>
+        )}
+
+        {phase==='dead'&&(
+          <div style={{textAlign:'center'}}>
+            <div style={{fontSize:40,marginBottom:8}}>💀</div>
+            <p style={{color:'#ff4466',fontWeight:800,fontSize:20,marginBottom:4}}>Game Over!</p>
+            <p style={{color:'#00ff88',fontSize:28,fontWeight:800,marginBottom:4}}>{score}</p>
+            <p style={{color:'#666',fontSize:13,marginBottom:20}}>{playerName}</p>
+            <div style={{marginBottom:20}}>
+              <p style={{color:'#666',fontSize:12,letterSpacing:1,textTransform:'uppercase',marginBottom:10}}>Leaderboard</p>
+              {leaderboard.slice(0,5).map((e,i)=>(
+                <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'1px solid #222',alignItems:'center',background:e.name===playerName&&e.score===score?'rgba(0,255,136,0.05)':'transparent',borderRadius:4,paddingLeft:4}}>
+                  <span style={{color:i===0?'#FFD700':i===1?'#C0C0C0':i===2?'#CD7F32':'#666',fontSize:13,fontWeight:700}}>{i+1}.</span>
+                  <span style={{color:e.name===playerName?'#00ff88':'#fff',fontSize:13,flex:1,marginLeft:10}}>{e.name}</span>
+                  <span style={{color:'#00ff88',fontWeight:700,fontSize:14}}>{e.score}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{display:'flex',gap:10}}>
+              <button onClick={startGame} style={{flex:1,padding:'12px',borderRadius:10,border:'none',background:'#00ff88',color:'#000',fontWeight:700,fontSize:15,cursor:'pointer',fontFamily:'inherit'}}>Play Again</button>
+              <button onClick={onClose} style={{flex:1,padding:'12px',borderRadius:10,border:'1px solid #333',background:'transparent',color:'#aaa',fontWeight:700,fontSize:15,cursor:'pointer',fontFamily:'inherit'}}>Exit</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
