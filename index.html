@@ -557,7 +557,7 @@ function SettingsScreen({users,saveUsers:su,navigate,toast,resetPin}){
         </>}
         {view==='danger'&&<>
           <h2 style={{fontWeight:800,fontSize:30,color:C.txt,margin:'0 0 20px',letterSpacing:'-0.8px',color:C.red}}>Danger Zone</h2>
-          <div style={{...card,border:'1.5px solid #FEE2E2',background:'#FEF2F2'}}>
+          <div style={{...card,border:'1.5px solid #FEE2E2',background:'#FEF2F2',marginBottom:14}}>
             <p style={{fontWeight:700,color:C.red,marginBottom:8}}>Delete All Parts</p>
             <p style={{color:C.sub,fontSize:13,marginBottom:16}}>This permanently deletes every part from the database. Cannot be undone. Use before importing a fresh spreadsheet.</p>
             <button onClick={async()=>{
@@ -567,6 +567,16 @@ function SettingsScreen({users,saveUsers:su,navigate,toast,resetPin}){
               toast('All parts deleted','success');
               setView('menu');
             }} style={{...btn,background:C.red,color:'#fff',padding:'12px 20px',width:'100%',fontSize:15}}>🗑 Delete All Parts</button>
+          </div>
+          <div style={{...card,border:'1.5px solid #FEE2E2',background:'#FEF2F2'}}>
+            <p style={{fontWeight:700,color:C.red,marginBottom:8}}>Clear Snake Leaderboard</p>
+            <p style={{color:C.sub,fontSize:13,marginBottom:16}}>Wipes all Snake game scores from both monthly and all-time leaderboards.</p>
+            <button onClick={async()=>{
+              if(!window.confirm('Clear the entire Snake leaderboard? This cannot be undone.'))return;
+              await db.collection('nhnn').doc('snake_leaderboard').set({v:[]});
+              toast('Leaderboard cleared','success');
+              setView('menu');
+            }} style={{...btn,background:C.red,color:'#fff',padding:'12px 20px',width:'100%',fontSize:15}}>🎮 Clear Snake Leaderboard</button>
           </div>
         </>}
         {view==='info'&&<>
